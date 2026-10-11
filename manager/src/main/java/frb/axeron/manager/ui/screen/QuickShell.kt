@@ -33,6 +33,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ClearAll
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
@@ -113,11 +114,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
 import android.widget.Toast
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalTextToolbar
-import androidx.compose.ui.platform.TextToolbar
-import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.viewinterop.AndroidView
+import frb.axeron.manager.ui.component.OutputView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -126,11 +127,10 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
     val viewModel: QuickShellViewModel = viewModel()
     val running = viewModel.isRunning
 
-    val listState = rememberLazyListState()
     val logs = remember { mutableStateListOf<QuickShellViewModel.Output>() }
 
-    var previousIndex by remember { mutableIntStateOf(0) }
-    var previousScrollOffset by remember { mutableIntStateOf(0) }
+    var renderEpoch by remember { mutableIntStateOf(0) }
+    var outputView by remember { mutableStateOf<OutputView?>(null) }
 
     // FAB visibility
     var fabVisible by remember { mutableStateOf(true) }
@@ -143,24 +143,8 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         }
     }
 
-    LaunchedEffect(listState, viewModel.isRunning) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (index, offset) ->
-                if (!viewModel.isRunning) {  // hanya update FAB kalau sedang tidak running
-                    if (index > previousIndex || (index == previousIndex && offset > previousScrollOffset)) {
-                        fabVisible = false
-                    } else if (index < previousIndex || offset < previousScrollOffset) {
-                        fabVisible = true
-                    }
-                }
-                previousIndex = index
-                previousScrollOffset = offset
-            }
-    }
-
     val scope = rememberCoroutineScope()
     val snackBarHost = LocalSnackbarHost.current
-
     var showExtraDialog by remember { mutableStateOf(false) }
 
     ExtraSettings(
@@ -168,6 +152,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         viewModel,
     ) {
         showExtraDialog = false
+        renderEpoch++
     }
 
 
@@ -273,12 +258,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
 
             LaunchedEffect(viewModel.clear) {
                 logs.clear()
-            }
-
-            LaunchedEffect(logs.size) {
-                if (logs.isNotEmpty()) {
-                    listState.animateScrollToItem(logs.lastIndex)
-                }
+                renderEpoch++
             }
 
             val assembler = remember { LineAssembler() }
@@ -329,63 +309,45 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
             }
 
 
-            val hScroll = rememberScrollState()
+            val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+            val fontSizeSp = MaterialTheme.typography.labelSmall.fontSize.value
+            val density = LocalDensity.current
+            val topPaddingPx = with(density) { 70.dp.roundToPx() }
+            val bottomPaddingPx = with(density) { 22.dp.roundToPx() }
 
-            val context = LocalContext.current
-
-            val delegateToolbar = LocalTextToolbar.current
-            val copyAllToolbar = remember(delegateToolbar) {
-                CopyAllTextToolbar(delegateToolbar) {
-                    val outputPrefs = PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
-                    val text = logs
-                        .filter { outputPrefs.loadState(context, it.type, true) }
-                        .joinToString("\n") { it.output.parseAsAnsiAnnotatedString().text }
-                    copyTextToClipboard(context, text) {
-                        scope.launch { saveLogsToDownload(context, logs, snackBarHost) }
-                    }
-                }
-            }
-
-            CompositionLocalProvider(LocalTextToolbar provides copyAllToolbar) {
-                SelectionContainer(
-                    modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .horizontalScroll(hScroll)
-                    ) {
-                        LazyColumn(
-                            state = listState,
-                        ) {
-                            item {
-                                Spacer(modifier = Modifier.size(70.dp))
-                            }
-                            items(logs) { line ->
-                                if (!PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
-                                        .loadState(context, line.type, true)
-                                ) return@items
-                                BasicText(
-                                    text = line.output.parseAsAnsiAnnotatedString(),
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        lineHeight = MaterialTheme.typography.labelSmall.fontSize, // samain dengan fontSize
-                                        lineHeightStyle = LineHeightStyle(
-                                            alignment = LineHeightStyle.Alignment.Center,
-                                            trim = LineHeightStyle.Trim.Both
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontFamily = FontFamily.Monospace
-                                    ),
-                                    softWrap = false,
-                                )
-                            }
-
-                            item {
-                                Spacer(modifier = Modifier.size(22.dp))
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp),
+                factory = { ctx ->
+                    OutputView(ctx).also { view ->
+                        view.onOversizedCopy = { text ->
+                            scope.launch { saveTextToDownload(ctx, text, snackBarHost) }
+                        }
+                        view.onScrollDelta = { delta ->
+                            if (!viewModel.isRunning) {
+                                if (delta > 0) fabVisible = false
+                                else if (delta < 0) fabVisible = true
                             }
                         }
+                        outputView = view
                     }
+                },
+                update = { view ->
+                    view.style(fontSizeSp, textColor, topPaddingPx, bottomPaddingPx)
                 }
+            )
+
+            LaunchedEffect(outputView) {
+                val view = outputView ?: return@LaunchedEffect
+                var seenEpoch = -1
+                snapshotFlow { Triple(renderEpoch, logs.size, logs.lastOrNull()) }
+                    .collect { (epoch, _, _) ->
+                        val full = epoch != seenEpoch
+                        seenEpoch = epoch
+                        val outputPrefs = PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
+                        view.render(logs, { outputPrefs.loadState(context, it.type, true) }, full)
+                    }
             }
 
             @SuppressLint("ConfigurationScreenWidthHeight")
@@ -770,62 +732,31 @@ private class LineAssembler {
     }
 }
 
-private class CopyAllTextToolbar(
-    private val delegate: TextToolbar,
-    private val copyAll: () -> Unit
-) : TextToolbar {
-    private var selectAllPressed = false
 
-    override val status: TextToolbarStatus
-        get() = delegate.status
+suspend fun saveTextToDownload(
+    context: Context,
+    text: String,
+    snackbar: SnackbarHostState
+) {
+    val logSaved = context.getString(R.string.log_saved_to)
+    val logFailed = context.getString(R.string.failed_to_save_log)
+    Toast.makeText(context, R.string.quickshell_copy_too_large, Toast.LENGTH_LONG).show()
 
-    override fun hide() = delegate.hide()
+    val format = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault())
+    val date = format.format(Date())
+    val baseDir = PathHelper.getPath(AxeronApiConstant.folder.PARENT_LOG)
+    val file = File(baseDir, "QuickShell_selection_${date}.log")
 
-    override fun showMenu(
-        rect: Rect,
-        onCopyRequested: (() -> Unit)?,
-        onPasteRequested: (() -> Unit)?,
-        onCutRequested: (() -> Unit)?,
-        onSelectAllRequested: (() -> Unit)?
-    ) {
-        if (onSelectAllRequested != null) selectAllPressed = false
-        delegate.showMenu(
-            rect,
-            onCopyRequested = onCopyRequested?.let { copy ->
-                {
-                    copy()
-                    if (selectAllPressed) copyAll()
-                }
-            },
-            onPasteRequested = onPasteRequested,
-            onCutRequested = onCutRequested,
-            onSelectAllRequested = onSelectAllRequested?.let { selectAll ->
-                {
-                    selectAllPressed = true
-                    selectAll()
-                }
-            }
-        )
-    }
-}
-
-private const val CLIPBOARD_MAX_CHARS = 240_000
-
-private fun copyTextToClipboard(context: Context, text: String, onTooLarge: () -> Unit) {
-    val copied = text.length <= CLIPBOARD_MAX_CHARS && try {
-        val clipboard = context.getSystemService(ClipboardManager::class.java)
-        clipboard.setPrimaryClip(ClipData.newPlainText("output", text))
-        true
-    } catch (e: Exception) {
-        false
-    }
-
-    if (copied) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            Toast.makeText(context, R.string.quickshell_copied_all, Toast.LENGTH_SHORT).show()
+    try {
+        withContext(Dispatchers.IO) {
+            if (!baseDir.exists()) baseDir.mkdirs()
+            val fos = Axeron.newFileService()
+                .getStreamSession(file.absolutePath, true, false).outputStream
+            fos.write(text.toByteArray())
+            fos.flush()
         }
-    } else {
-        Toast.makeText(context, R.string.quickshell_copy_too_large, Toast.LENGTH_LONG).show()
-        onTooLarge()
+        snackbar.showSnackbar(logSaved.format(file.absolutePath))
+    } catch (e: Exception) {
+        snackbar.showSnackbar(logFailed.format(e.message))
     }
 }

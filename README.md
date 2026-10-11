@@ -57,7 +57,7 @@ AxManager explores a dedicated **ADB environment** on Android: instead of being 
 
 **Quick Shell**
 - Output lines are reassembled across read chunks, so long listings (for example `find /sdcard/Download`) are no longer split in the middle of a line.
-- Selecting all and copying now copies the whole output, including lines that are not currently rendered. Outputs too large for the clipboard are saved to Downloads instead.
+- The output is a native selectable text view. Long-press and drag to select, or use *Select all*, and everything is copied, including lines far outside the visible area. A selection too large for the clipboard is saved to Downloads instead.
 
 ### Wake lock modes
 

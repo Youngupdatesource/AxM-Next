@@ -42,6 +42,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import androidx.compose.foundation.layout.aspectRatio
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
 
 /**
  * Penyimpanan banner kartu status Home. File disalin sekali ke filesDir (tidak bergantung pada Uri picker),
@@ -131,11 +133,24 @@ fun rememberStatusBannerFile(): File? {
  * - GIF hanya dianimasikan saat Activity STARTED; selain itu painter dilepas dari komposisi
  *   sehingga animasi berhenti dan tidak menghabiskan baterai di background.
  */
+private fun Context.findComponentActivity(): ComponentActivity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is ComponentActivity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
 @Composable
 fun StatusBannerImage(file: File, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val version = BannerStore.version
-    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    val ownerLifecycle = LocalLifecycleOwner.current.lifecycle
+    val lifecycle = remember(context, ownerLifecycle) {
+        context.findComponentActivity()?.lifecycle ?: ownerLifecycle
+    }
+    val lifecycleState by lifecycle.currentStateFlow.collectAsState()
     val visible = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
     var areaSize by remember { mutableStateOf(IntSize.Zero) }
 
