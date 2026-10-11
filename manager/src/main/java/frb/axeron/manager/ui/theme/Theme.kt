@@ -62,8 +62,7 @@ fun AxManagerTheme(
             }
         }
 
-        darkTheme -> getVortexDarkColorScheme(customPrimaryColor)
-        else -> getVortexLightColorScheme(customPrimaryColor)
+        else -> resolveAppColorScheme(darkTheme, customPrimaryColor)
     }
 
     val cardColor = when {
