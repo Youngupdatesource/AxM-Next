@@ -58,7 +58,7 @@ fun Color.toHexString(includeAlpha: Boolean = true): String {
 
 val AMOLED_BLACK: Color = Color(0xFF000000)
 
-val KSU_PRIMARY = Color(0xFF8AADF4)
+val KSU_PRIMARY = Color(0xFFBEC4EE)
 val KSU_PRIMARY_LIGHT = Color(0xFFB7BDF8)
 val KSU_SECONDARY_LIGHT = Color(0xFFA6DA95)
 val KSU_PRIMARY_DARK = Color(0xFF7DC4E4)
@@ -74,6 +74,7 @@ val KsuDarkColorScheme = darkColorScheme(
 
 val KsuLightColorScheme = lightColorScheme(
     primary = KSU_PRIMARY,
+    onPrimary = Color(0xFF1E2030),
     secondary = KSU_PRIMARY_LIGHT,
     tertiary = KSU_SECONDARY_LIGHT
 )
