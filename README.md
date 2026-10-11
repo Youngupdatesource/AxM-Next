@@ -35,6 +35,7 @@ AxManager explores a dedicated **ADB environment** on Android: instead of being 
 
 **UI / UX**
 - Rebranded as **AxM-Next v1.0**, with new launcher icons and a new maintainer profile.
+- Colors follow KernelSU-Next: dynamic color is on by default on Android 12+ (a neutral, wallpaper-based palette), and the fallback palette in light and dark mode is KernelSU-Next's own (blue primary `#8AADF4`). Custom primary colors still work when dynamic color is turned off.
 - **Status card banner** with your own image (JPG, PNG, WebP, or animated GIF, up to 8 MB) at a standard **16:9** ratio, configurable in *Appearance*.
 - Stat tiles and a device info card (device, kernel, Android version, ABI, SELinux context).
 - Swipe left or right to switch between tabs, plus reworked navigation transitions.
