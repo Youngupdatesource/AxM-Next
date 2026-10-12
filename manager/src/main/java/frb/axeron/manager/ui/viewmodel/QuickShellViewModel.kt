@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import android.os.Looper
+import android.os.SystemClock
+import java.util.concurrent.atomic.AtomicLong
 
 class QuickShellViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -159,8 +162,30 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
         session.runCommand(cmd, isCompatModeEnabled)
     }
 
+    private val queuedChars = AtomicLong(0)
+
+    fun onOutputConsumed(chars: Long) {
+        queuedChars.addAndGet(-chars)
+    }
+
     private fun append(type: OutputType, output: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            val deadline = SystemClock.elapsedRealtime() + QUEUE_WAIT_MS
+            while (queuedChars.get() > MAX_QUEUED_CHARS && SystemClock.elapsedRealtime() < deadline) {
+                try {
+                    Thread.sleep(2)
+                } catch (e: InterruptedException) {
+                    break
+                }
+            }
+        }
+        queuedChars.addAndGet(output.length.toLong())
         _output.trySend(Output(type, output))
+    }
+
+    private companion object {
+        const val MAX_QUEUED_CHARS = 8_000_000L
+        const val QUEUE_WAIT_MS = 5_000L
     }
 
     override fun onCleared() {

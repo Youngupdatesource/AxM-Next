@@ -121,6 +121,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.derivedStateOf
 import kotlinx.coroutines.delay
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -283,11 +284,23 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         val next = channel.tryReceive().getOrNull() ?: break
                         batch.add(next)
                     }
-                    for (line in batch) {
-                        retainedChars[0] += line.output.length + 1L
-                        applyOutput(logs, assembler, line)
+                    var consumed = 0L
+                    try {
+                        for (line in batch) {
+                            consumed += line.output.length
+                            retainedChars[0] += line.output.length + 1L
+                            applyOutput(logs, assembler, line)
+                        }
+                        dropCounter[0] += trimLogs(logs, retainedChars)
+                    } catch (e: OutOfMemoryError) {
+                        logs.clear()
+                        retainedChars[0] = 0L
+                        dropCounter[0] = 0
+                        renderEpoch++
+                    } catch (e: Exception) {
+                        Log.e("QuickShell", "failed to process output", e)
                     }
-                    dropCounter[0] += trimLogs(logs, retainedChars)
+                    viewModel.onOutputConsumed(consumed)
                     logTick++
                     delay(OUTPUT_BATCH_PAUSE_MS)
                 }
@@ -333,13 +346,26 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         do {
                             val dropped = dropCounter[0]
                             dropCounter[0] = 0
-                            val more = view.render(
-                                logs,
-                                { outputPrefs.loadState(context, it.type, true) },
-                                full,
-                                dropped,
-                                OUTPUT_MAX_RENDER_LINES
-                            )
+                            val more = try {
+                                view.render(
+                                    logs,
+                                    { outputPrefs.loadState(context, it.type, true) },
+                                    full,
+                                    dropped,
+                                    OUTPUT_MAX_RENDER_LINES
+                                )
+                            } catch (e: Exception) {
+                                Log.e("QuickShell", "render failed", e)
+                                view.reset()
+                                seenEpoch = -1
+                                false
+                            } catch (e: OutOfMemoryError) {
+                                view.reset()
+                                logs.clear()
+                                retainedChars[0] = 0L
+                                seenEpoch = -1
+                                false
+                            }
                             full = false
                             if (more) delay(1)
                         } while (more)

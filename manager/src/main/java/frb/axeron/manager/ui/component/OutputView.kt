@@ -103,6 +103,14 @@ class OutputView(context: Context) : ScrollView(context) {
         return pending
     }
 
+    fun reset() {
+        val buffer = ensureEditable()
+        buffer.clear()
+        committed = 0
+        tailStart = 0
+        entryLengths.clear()
+    }
+
     private fun dropHead(buffer: Editable, count: Int) {
         var chars = 0
         var removed = 0
@@ -122,8 +130,18 @@ class OutputView(context: Context) : ScrollView(context) {
     }
 
     private fun appendLine(buffer: Editable, raw: String, newline: Boolean) {
-        val styled = raw.parseAsAnsiAnnotatedString()
+        val safe = if (raw.indexOf('\u0000') >= 0) raw.replace("\u0000", "") else raw
+        val styled = try {
+            safe.parseAsAnsiAnnotatedString()
+        } catch (e: Exception) {
+            null
+        }
         val start = buffer.length
+        if (styled == null) {
+            buffer.append(safe)
+            if (newline) buffer.append('\n')
+            return
+        }
         buffer.append(styled.text)
         for (range in styled.spanStyles) {
             val from = start + range.start

@@ -1,4 +1,27 @@
 #!/system/bin/sh
+
+AX_SYSTEM_DIRS="${AX_SYSTEM_DIRS:-/system/bin /system/xbin /vendor/bin}"
+
+ax_system_tool() {
+  local name="$1" dir target
+  for dir in $AX_SYSTEM_DIRS; do
+    [ -x "$dir/$name" ] || continue
+    target=$(readlink -f "$dir/$name" 2>/dev/null)
+    case "$target" in
+      */busybox*) continue ;;
+    esac
+    echo "$dir/$name"
+    return 0
+  done
+  return 1
+}
+
+for ax_tool in cat cp mv rm mkdir rmdir touch chmod chown ln ls sed grep head tail tr wc cut sort basename dirname dos2unix unzip; do
+  ax_path=$(ax_system_tool "$ax_tool") || continue
+  eval "$ax_tool() { \"$ax_path\" \"\$@\"; }"
+done
+unset ax_tool ax_path
+
 ui_print() {
   echo "$1"
 }
