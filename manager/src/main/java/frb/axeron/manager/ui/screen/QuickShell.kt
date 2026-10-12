@@ -119,6 +119,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import frb.axeron.manager.ui.component.OutputView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.derivedStateOf
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -127,7 +129,11 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
     val viewModel: QuickShellViewModel = viewModel()
     val running = viewModel.isRunning
 
-    val logs = remember { mutableStateListOf<QuickShellViewModel.Output>() }
+    val logs = remember { ArrayList<QuickShellViewModel.Output>() }
+    var logTick by remember { mutableIntStateOf(0) }
+    val hasLogs by remember { derivedStateOf { logTick >= 0 && logs.isNotEmpty() } }
+    val dropCounter = remember { IntArray(1) }
+    val retainedChars = remember { LongArray(1) }
 
     var renderEpoch by remember { mutableIntStateOf(0) }
     var outputView by remember { mutableStateOf<OutputView?>(null) }
@@ -183,7 +189,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         onClick = {
                             viewModel.clear()
                         },
-                        enabled = logs.isNotEmpty()
+                        enabled = hasLogs
                     ) {
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
                     }
@@ -199,14 +205,14 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = fabVisible && logs.isNotEmpty(),
+                visible = fabVisible && hasLogs,
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
             ) {
                 val context = LocalContext.current
                 FloatingActionButton(onClick = {
                     scope.launch {
-                        saveLogsToDownload(context, logs, snackBarHost)
+                        saveLogsToDownload(context, logs.toList(), snackBarHost)
                     }
                 }) {
                     Icon(Icons.Default.Save, contentDescription = stringResource(R.string.save))
@@ -258,56 +264,34 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
 
             LaunchedEffect(viewModel.clear) {
                 logs.clear()
+                dropCounter[0] = 0
+                retainedChars[0] = 0L
                 renderEpoch++
+                logTick++
             }
 
             val assembler = remember { LineAssembler() }
 
-            // collect flow
             LaunchedEffect(Unit) {
-                viewModel.output.collect { line ->
-                    val raw = line.output
-                    val isStream = line.type == QuickShellViewModel.OutputType.TYPE_STDOUT ||
-                            line.type == QuickShellViewModel.OutputType.TYPE_STDERR
-
-                    if (isStream) {
-                        if (raw.isEmpty()) return@collect
-                    } else if (line.type != QuickShellViewModel.OutputType.TYPE_SPACE && raw.isBlank()) {
-                        return@collect
+                val channel = viewModel.output
+                val batch = ArrayList<QuickShellViewModel.Output>(OUTPUT_MAX_BATCH)
+                while (true) {
+                    val first = channel.receiveCatching().getOrNull() ?: break
+                    batch.clear()
+                    batch.add(first)
+                    while (batch.size < OUTPUT_MAX_BATCH) {
+                        val next = channel.tryReceive().getOrNull() ?: break
+                        batch.add(next)
                     }
-                    // ===== DETECT SCREEN MODE =====
-
-                    // ===== SCREEN MODE (top, watch, htop, etc) =====
-                    if (AnsiFilter.isScreenControl(raw)) {
-                        val clean = AnsiFilter.stripAnsi(raw)
-
-                        if (clean.isEmpty()) return@collect
-                        if (logs.isEmpty()) {
-                            logs.add(
-                                QuickShellViewModel.Output(
-                                    type = line.type,
-                                    output = clean,
-                                    completed = false
-                                )
-                            )
-                        } else {
-                            val last = logs.last()
-                            logs[logs.lastIndex] = last.copy(output = clean)
-                        }
-                        return@collect
+                    for (line in batch) {
+                        retainedChars[0] += line.output.length + 1L
+                        applyOutput(logs, assembler, line)
                     }
-
-
-                    if (!isStream) {
-                        assembler.closeOpenLine(logs)
-                        logs.add(line.copy(completed = true))
-                        return@collect
-                    }
-
-                    assembler.feed(logs, line.type, raw)
+                    dropCounter[0] += trimLogs(logs, retainedChars)
+                    logTick++
+                    delay(OUTPUT_BATCH_PAUSE_MS)
                 }
             }
-
 
             val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
             val fontSizeSp = MaterialTheme.typography.labelSmall.fontSize.value
@@ -341,12 +325,24 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
             LaunchedEffect(outputView) {
                 val view = outputView ?: return@LaunchedEffect
                 var seenEpoch = -1
-                snapshotFlow { Triple(renderEpoch, logs.size, logs.lastOrNull()) }
-                    .collect { (epoch, _, _) ->
-                        val full = epoch != seenEpoch
+                snapshotFlow { renderEpoch to logTick }
+                    .collect { (epoch, _) ->
+                        var full = epoch != seenEpoch
                         seenEpoch = epoch
                         val outputPrefs = PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
-                        view.render(logs, { outputPrefs.loadState(context, it.type, true) }, full)
+                        do {
+                            val dropped = dropCounter[0]
+                            dropCounter[0] = 0
+                            val more = view.render(
+                                logs,
+                                { outputPrefs.loadState(context, it.type, true) },
+                                full,
+                                dropped,
+                                OUTPUT_MAX_RENDER_LINES
+                            )
+                            full = false
+                            if (more) delay(1)
+                        } while (more)
                     }
             }
 
@@ -659,6 +655,73 @@ suspend fun saveLogsToDownload(
 }
 
 
+private const val OUTPUT_MAX_BATCH = 2048
+private const val OUTPUT_BATCH_PAUSE_MS = 4L
+private const val OUTPUT_MAX_RENDER_LINES = 4000
+private const val OUTPUT_MAX_RETAINED_CHARS = 6_000_000L
+private const val OUTPUT_TRIM_TARGET_CHARS = 4_500_000L
+private const val OUTPUT_MAX_LINE_CHARS = 20_000
+
+private fun applyOutput(
+    logs: MutableList<QuickShellViewModel.Output>,
+    assembler: LineAssembler,
+    line: QuickShellViewModel.Output
+) {
+    val raw = line.output
+    val isStream = line.type == QuickShellViewModel.OutputType.TYPE_STDOUT ||
+            line.type == QuickShellViewModel.OutputType.TYPE_STDERR
+
+    if (isStream) {
+        if (raw.isEmpty()) return
+    } else if (line.type != QuickShellViewModel.OutputType.TYPE_SPACE && raw.isBlank()) {
+        return
+    }
+
+    if (AnsiFilter.isScreenControl(raw)) {
+        val clean = AnsiFilter.stripAnsi(raw)
+        if (clean.isEmpty()) return
+        if (logs.isEmpty()) {
+            logs.add(
+                QuickShellViewModel.Output(
+                    type = line.type,
+                    output = clean,
+                    completed = false
+                )
+            )
+        } else {
+            val last = logs.last()
+            logs[logs.lastIndex] = last.copy(output = clean)
+        }
+        return
+    }
+
+    if (!isStream) {
+        assembler.closeOpenLine(logs)
+        logs.add(line.copy(completed = true))
+        return
+    }
+
+    assembler.feed(logs, line.type, raw)
+}
+
+private fun trimLogs(logs: MutableList<QuickShellViewModel.Output>, retained: LongArray): Int {
+    if (retained[0] <= OUTPUT_MAX_RETAINED_CHARS) return 0
+    var total = 0L
+    for (entry in logs) total += entry.output.length + 1L
+    retained[0] = total
+    if (total <= OUTPUT_MAX_RETAINED_CHARS) return 0
+
+    var remove = 0
+    var dropped = 0L
+    while (remove < logs.size - 1 && total - dropped > OUTPUT_TRIM_TARGET_CHARS) {
+        dropped += logs[remove].output.length + 1L
+        remove++
+    }
+    logs.subList(0, remove).clear()
+    retained[0] = total - dropped
+    return remove
+}
+
 private class LineAssembler {
     private val pendingCr = HashMap<QuickShellViewModel.OutputType, Boolean>()
 
@@ -708,6 +771,11 @@ private class LineAssembler {
                 else -> {
                     open.append(ch)
                     hasOpen = true
+                    if (open.length >= OUTPUT_MAX_LINE_CHARS) {
+                        finished.add(open.toString())
+                        open.setLength(0)
+                        hasOpen = false
+                    }
                 }
             }
         }

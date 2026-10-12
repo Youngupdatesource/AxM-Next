@@ -517,6 +517,18 @@ fun StatusCard(
                             file = bannerFile,
                             modifier = Modifier.matchParentSize()
                         )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.5f to Color.Transparent,
+                                            1f to Color.Black.copy(alpha = 0.6f)
+                                        )
+                                    )
+                                )
+                        )
                     } else {
                         Box(
                             modifier = Modifier

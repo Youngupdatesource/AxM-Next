@@ -30,6 +30,7 @@ class OutputView(context: Context) : ScrollView(context) {
     private val textView = OutputTextView(context)
     private var committed = 0
     private var tailStart = 0
+    private val entryLengths = ArrayDeque<Int>()
 
     var onOversizedCopy: ((String) -> Unit)?
         get() = textView.onOversizedCopy
@@ -62,35 +63,55 @@ class OutputView(context: Context) : ScrollView(context) {
     fun render(
         logs: List<QuickShellViewModel.Output>,
         isVisible: (QuickShellViewModel.Output) -> Boolean,
-        full: Boolean
-    ) {
+        full: Boolean,
+        dropped: Int,
+        maxLines: Int
+    ): Boolean {
         val stickToBottom = isNearBottom()
         val buffer = ensureEditable()
 
         if (full || logs.size < committed) {
             buffer.clear()
             committed = 0
-            tailStart = 0
-        } else if (tailStart < buffer.length) {
-            buffer.delete(tailStart, buffer.length)
+            entryLengths.clear()
+        } else {
+            if (tailStart < buffer.length) buffer.delete(tailStart, buffer.length)
+            if (dropped > 0) dropHead(buffer, dropped)
         }
+        tailStart = buffer.length
 
         val lastLine = logs.lastOrNull()
         val hasTail = lastLine != null && !lastLine.completed
         val commitEnd = if (hasTail) logs.lastIndex else logs.size
+        val limit = minOf(commitEnd, committed + maxLines)
 
-        for (index in committed until commitEnd) {
+        for (index in committed until limit) {
             val line = logs[index]
+            val before = buffer.length
             if (isVisible(line)) appendLine(buffer, line.output, true)
+            entryLengths.addLast(buffer.length - before)
         }
-        committed = commitEnd
+        committed = limit
         tailStart = buffer.length
 
-        if (lastLine != null && hasTail && isVisible(lastLine)) {
+        val pending = committed < commitEnd
+        if (!pending && lastLine != null && hasTail && isVisible(lastLine)) {
             appendLine(buffer, lastLine.output, false)
         }
 
         if (stickToBottom) scrollToBottomAfterLayout()
+        return pending
+    }
+
+    private fun dropHead(buffer: Editable, count: Int) {
+        var chars = 0
+        var removed = 0
+        while (removed < count && entryLengths.isNotEmpty()) {
+            chars += entryLengths.removeFirst()
+            removed++
+        }
+        if (chars > 0) buffer.delete(0, chars)
+        committed = (committed - count).coerceAtLeast(0)
     }
 
     private fun ensureEditable(): Editable {

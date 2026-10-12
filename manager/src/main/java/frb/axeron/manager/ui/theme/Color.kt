@@ -68,7 +68,9 @@ val basePrimaryDefault = KSU_PRIMARY
 
 val KsuDarkColorScheme = darkColorScheme(
     primary = KSU_PRIMARY,
-    secondary = KSU_PRIMARY_DARK,
+    secondary = Color(0xFFC4C5E8),
+    onSecondaryContainer = Color(0xFFE0E1FF),
+    onSurfaceVariant = Color(0xFFC3C6D7),
     tertiary = KSU_SECONDARY_DARK
 )
 

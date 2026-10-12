@@ -18,6 +18,8 @@ import frb.axeron.axerish.R
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 
 class QuickShellViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -122,8 +124,8 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     }
 
 
-    private val _output = MutableSharedFlow<Output>(extraBufferCapacity = 64)
-    val output: SharedFlow<Output> = _output
+    private val _output = Channel<Output>(Channel.UNLIMITED)
+    val output: ReceiveChannel<Output> = _output
 
     var isRunning by mutableStateOf(false)
         private set
@@ -158,9 +160,7 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun append(type: OutputType, output: String) {
-        viewModelScope.launch {
-            _output.emit(Output(type, output))
-        }
+        _output.trySend(Output(type, output))
     }
 
     override fun onCleared() {
