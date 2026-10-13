@@ -9,7 +9,7 @@ ax_system_tool() {
   for dir in $AX_SYSTEM_DIRS; do
     [ -x "$dir/$name" ] || continue
     if [ -L "$dir/$name" ]; then
-      target=$(readlink -f "$dir/$name" 2>/dev/null)
+      target=$(command readlink -f "$dir/$name" 2>/dev/null)
       case "$target" in
         */busybox*) continue ;;
       esac
@@ -20,39 +20,52 @@ ax_system_tool() {
   return 1
 }
 
-# Names BusyBox ash may resolve internally (applets). Used when
-# `busybox --list` is not reachable.
-AX_APPLETS_FALLBACK="awk base64 basename blkdiscard blkid blockdev brctl bunzip2 bzcat bzip2 cal cat chattr chcon chgrp chmod chown chroot chrt cksum clear cmp comm cp cpio cut date dd devmem df diff dirname dmesg dos2unix du egrep env expand expr fallocate fgrep find flock free fsync getenforce getopt grep groups gunzip gzip head hostname hwclock id ifconfig inotifyd insmod install ionice ip killall ln losetup ls lsattr lsmod lsof lspci lsusb md5sum microcom mkdir mke2fs mkfifo mknod mkswap mktemp modinfo modprobe more mount mountpoint mv nc netstat nice nl nohup nproc nsenter od paste patch pgrep pidof ping ping6 pkill pmap printenv ps readlink realpath renice rm rmdir rmmod rtcwake runcon sed seq setenforce setfattr setsid sh sha1sum sha256sum sha512sum sleep sort split stat strings stty svc swapoff swapon sync sysctl tac tail tar tc tee timeout top touch tr truncate tty tune2fs umount uname uniq unix2dos unlink unshare unzip uptime usleep uudecode uuencode vi watch wc which whoami xargs xxd zcat"
+# Dispatch each discovered BusyBox applet to the native Android binary first,
+# then to BusyBox only when Android does not provide that tool.
+ax_dispatch() {
+  local name="$1"
+  shift
+  if ax_system_tool "$name"; then
+    "$AX_TOOL_PATH" "$@"
+    return $?
+  fi
+  if [ -n "$AX_BUSYBOX_CMD" ]; then
+    "$AX_BUSYBOX_CMD" "$name" "$@"
+    return $?
+  fi
+  echo "ax: command not found: $name" >&2
+  return 127
+}
 
-# Prefer the phone's own tools over BusyBox applets, by default and without
-# any flag in the plugin. BusyBox stays reachable only for tools the phone
-# does not ship (it is last in PATH, via $AXERONBIN).
-#  1. switch BusyBox ash "standalone" mode off (applets would beat PATH);
-#  2. pin every applet that has a system binary to that binary, because a
-#     shell function always wins over an applet, whatever the shell mode is.
+# Discover applets at runtime; no hard-coded applet inventory is needed.
+# Wrappers are created only for valid shell function names. Shell builtins are
+# left untouched, and each wrapper performs native-first resolution at runtime.
 ax_prefer_system_tools() {
   local list name bb
+  AX_BUSYBOX_CMD=
   unset ASH_STANDALONE
   (set +o standalone) 2>/dev/null && set +o standalone
 
   list=
-  for bb in "${AXERONLIB:+$AXERONLIB/libbusybox.so}" busybox; do
+  for bb in "${AXERONLIB:+$AXERONLIB/libbusybox.so}" "$(command -v busybox 2>/dev/null)"; do
     [ -n "$bb" ] || continue
-    list=$("$bb" --list 2>/dev/null) && [ -n "$list" ] && break
-    list=
+    [ -x "$bb" ] || continue
+    list=$("$bb" --list 2>/dev/null) || list=
+    if [ -n "$list" ]; then
+      AX_BUSYBOX_CMD="$bb"
+      break
+    fi
   done
-  [ -n "$list" ] || list=$AX_APPLETS_FALLBACK
+
+  [ -n "$list" ] || return 1
 
   for name in $list; do
     case "$name" in
-      # shell builtins: keep them builtin (also what the phone's sh does)
+      # Preserve shell builtins rather than shadowing their semantics.
       '['|'[['|echo|printf|test|true|false|kill|pwd|time|ulimit|cd|exec|eval|command|type|umask|wait|read|set|unset|exit|export|alias|unalias|trap|shift|return|break|continue|local) continue ;;
+      ''|*[!A-Za-z0-9_]*) continue ;;
     esac
-    ax_system_tool "$name" || continue
-    case "$name" in
-      *[!A-Za-z0-9_]*) alias "$name=\"$AX_TOOL_PATH\" " ;;
-      *) eval "$name() { \"$AX_TOOL_PATH\" \"\$@\"; }" ;;
-    esac
+    eval "$name() { ax_dispatch '$name' \"\$@\"; }"
   done
 }
 
@@ -138,10 +151,10 @@ set_perm() {
 # $1 = MODPATH
 set_perm_recursive() {
   find "$1" -type d 2>/dev/null | while read -r dir; do
-    set_perm "$dir" "$2" "$3" "$4" "$6"
+    set_perm "$dir" "$2" "$3" "$4"
   done
-  find "$1" -type f -o -type l 2>/dev/null | while read -r file; do
-    set_perm "$file" "$2" "$3" "$5" "$6"
+  find "$1" \( -type f -o -type l \) 2>/dev/null | while read -r file; do
+    set_perm "$file" "$2" "$3" "$5"
   done
 }
 
