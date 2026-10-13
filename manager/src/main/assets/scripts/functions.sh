@@ -2,6 +2,15 @@
 
 AX_SYSTEM_DIRS="${AX_SYSTEM_DIRS:-/system/bin /system/xbin /vendor/bin}"
 
+# Prefer the phone's own tools (toybox) over BusyBox applets by default.
+# When the installer shell is BusyBox ash with ASH_STANDALONE enabled, every
+# applet (awk, base64, grep, ...) silently wins over /system/bin. Turn that
+# off here so plain PATH lookup is used; BusyBox in $AXERONBIN stays as the
+# last-resort fallback for tools the phone does not ship.
+# The subshell probe keeps shells without this option (mksh, toybox sh) safe.
+unset ASH_STANDALONE
+(set +o standalone) 2>/dev/null && set +o standalone
+
 ax_system_tool() {
   local name="$1" dir target
   for dir in $AX_SYSTEM_DIRS; do
@@ -197,6 +206,14 @@ install_plugin() {
     ui_print "- Extracting module files"
     unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2
     set_perm_recursive "$MODPATH" 2000 2000 0755 0755
+  fi
+
+  # Opt-in: a plugin can still force BusyBox applets by declaring
+  # ASH_STANDALONE=1 in its customize.sh (same rule as action/service scripts).
+  if grep -q '^ASH_STANDALONE=1$' "$MODPATH"/customize.sh 2>/dev/null; then
+    ASH_STANDALONE=1
+    export ASH_STANDALONE
+    (set -o standalone) 2>/dev/null && set -o standalone
   fi
 
   # Load customization script
