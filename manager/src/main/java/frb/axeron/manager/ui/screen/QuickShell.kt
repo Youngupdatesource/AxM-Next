@@ -683,9 +683,9 @@ suspend fun saveLogsToDownload(
 
 private const val OUTPUT_MAX_BATCH = 2048
 private const val OUTPUT_BATCH_PAUSE_MS = 4L
-private const val OUTPUT_MAX_RENDER_LINES = 4000
-private const val OUTPUT_MAX_RETAINED_CHARS = 6_000_000L
-private const val OUTPUT_TRIM_TARGET_CHARS = 4_500_000L
+private const val OUTPUT_MAX_RENDER_LINES = 2000
+private const val OUTPUT_MAX_RETAINED_CHARS = 2_500_000L
+private const val OUTPUT_TRIM_TARGET_CHARS = 1_800_000L
 private const val OUTPUT_MAX_LINE_CHARS = 20_000
 
 private fun applyOutput(

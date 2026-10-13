@@ -31,6 +31,7 @@ class OutputView(context: Context) : ScrollView(context) {
     private var committed = 0
     private var tailStart = 0
     private val entryLengths = ArrayDeque<Int>()
+    private var scrollPending = false
 
     var onOversizedCopy: ((String) -> Unit)?
         get() = textView.onOversizedCopy
@@ -131,6 +132,11 @@ class OutputView(context: Context) : ScrollView(context) {
 
     private fun appendLine(buffer: Editable, raw: String, newline: Boolean) {
         val safe = if (raw.indexOf('\u0000') >= 0) raw.replace("\u0000", "") else raw
+        if (safe.indexOf('\u001b') < 0) {
+            buffer.append(safe)
+            if (newline) buffer.append('\n')
+            return
+        }
         val styled = try {
             safe.parseAsAnsiAnnotatedString()
         } catch (e: Exception) {
@@ -193,10 +199,13 @@ class OutputView(context: Context) : ScrollView(context) {
     }
 
     private fun scrollToBottomAfterLayout() {
+        if (scrollPending) return
         val observer = viewTreeObserver
         if (!observer.isAlive) return
+        scrollPending = true
         observer.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
+                scrollPending = false
                 if (viewTreeObserver.isAlive) viewTreeObserver.removeOnPreDrawListener(this)
                 val child = getChildAt(0)
                 if (child != null) scrollTo(0, (child.height - height).coerceAtLeast(0))
