@@ -33,7 +33,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ClearAll
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
@@ -110,18 +109,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.os.Build
-import android.widget.Toast
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.viewinterop.AndroidView
-import frb.axeron.manager.ui.component.OutputView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import androidx.compose.runtime.derivedStateOf
-import kotlinx.coroutines.delay
-import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -130,14 +117,11 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
     val viewModel: QuickShellViewModel = viewModel()
     val running = viewModel.isRunning
 
-    val logs = remember { ArrayList<QuickShellViewModel.Output>() }
-    var logTick by remember { mutableIntStateOf(0) }
-    val hasLogs by remember { derivedStateOf { logTick >= 0 && logs.isNotEmpty() } }
-    val dropCounter = remember { IntArray(1) }
-    val retainedChars = remember { LongArray(1) }
+    val listState = rememberLazyListState()
+    val logs = remember { mutableStateListOf<QuickShellViewModel.Output>() }
 
-    var renderEpoch by remember { mutableIntStateOf(0) }
-    var outputView by remember { mutableStateOf<OutputView?>(null) }
+    var previousIndex by remember { mutableIntStateOf(0) }
+    var previousScrollOffset by remember { mutableIntStateOf(0) }
 
     // FAB visibility
     var fabVisible by remember { mutableStateOf(true) }
@@ -150,8 +134,24 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         }
     }
 
+    LaunchedEffect(listState, viewModel.isRunning) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (!viewModel.isRunning) {  // hanya update FAB kalau sedang tidak running
+                    if (index > previousIndex || (index == previousIndex && offset > previousScrollOffset)) {
+                        fabVisible = false
+                    } else if (index < previousIndex || offset < previousScrollOffset) {
+                        fabVisible = true
+                    }
+                }
+                previousIndex = index
+                previousScrollOffset = offset
+            }
+    }
+
     val scope = rememberCoroutineScope()
     val snackBarHost = LocalSnackbarHost.current
+
     var showExtraDialog by remember { mutableStateOf(false) }
 
     ExtraSettings(
@@ -159,7 +159,6 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         viewModel,
     ) {
         showExtraDialog = false
-        renderEpoch++
     }
 
 
@@ -190,7 +189,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         onClick = {
                             viewModel.clear()
                         },
-                        enabled = hasLogs
+                        enabled = logs.isNotEmpty()
                     ) {
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
                     }
@@ -206,14 +205,14 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         },
         floatingActionButton = {
             AnimatedVisibility(
-                visible = fabVisible && hasLogs,
+                visible = fabVisible && logs.isNotEmpty(),
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
             ) {
                 val context = LocalContext.current
                 FloatingActionButton(onClick = {
                     scope.launch {
-                        saveLogsToDownload(context, logs.toList(), snackBarHost)
+                        saveLogsToDownload(context, logs, snackBarHost)
                     }
                 }) {
                     Icon(Icons.Default.Save, contentDescription = stringResource(R.string.save))
@@ -265,111 +264,149 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
 
             LaunchedEffect(viewModel.clear) {
                 logs.clear()
-                dropCounter[0] = 0
-                retainedChars[0] = 0L
-                renderEpoch++
-                logTick++
             }
 
-            val assembler = remember { LineAssembler() }
+            LaunchedEffect(logs.size) {
+                if (logs.isNotEmpty()) {
+                    listState.animateScrollToItem(logs.lastIndex)
+                }
+            }
 
+            // collect flow
             LaunchedEffect(Unit) {
-                val channel = viewModel.output
-                val batch = ArrayList<QuickShellViewModel.Output>(OUTPUT_MAX_BATCH)
-                while (true) {
-                    val first = channel.receiveCatching().getOrNull() ?: break
-                    batch.clear()
-                    batch.add(first)
-                    while (batch.size < OUTPUT_MAX_BATCH) {
-                        val next = channel.tryReceive().getOrNull() ?: break
-                        batch.add(next)
-                    }
-                    var consumed = 0L
-                    try {
-                        for (line in batch) {
-                            consumed += line.output.length
-                            retainedChars[0] += line.output.length + 1L
-                            applyOutput(logs, assembler, line)
+                viewModel.output.collect { line ->
+                    val raw = line.output
+
+                    if (line.type != QuickShellViewModel.OutputType.TYPE_SPACE && raw.isBlank()) return@collect
+                    // ===== DETECT SCREEN MODE =====
+
+                    // ===== SCREEN MODE (top, watch, htop, etc) =====
+                    if (AnsiFilter.isScreenControl(raw)) {
+                        val clean = AnsiFilter.stripAnsi(raw)
+
+                        if (clean.isEmpty()) return@collect
+                        if (logs.isEmpty()) {
+                            logs.add(
+                                QuickShellViewModel.Output(
+                                    type = line.type,
+                                    output = clean,
+                                    completed = false
+                                )
+                            )
+                        } else {
+                            val last = logs.last()
+                            logs[logs.lastIndex] = last.copy(output = clean)
                         }
-                        dropCounter[0] += trimLogs(logs, retainedChars)
-                    } catch (e: OutOfMemoryError) {
-                        logs.clear()
-                        retainedChars[0] = 0L
-                        dropCounter[0] = 0
-                        renderEpoch++
-                    } catch (e: Exception) {
-                        Log.e("QuickShell", "failed to process output", e)
+                        return@collect
                     }
-                    viewModel.onOutputConsumed(consumed)
-                    logTick++
-                    delay(OUTPUT_BATCH_PAUSE_MS)
+
+
+                    // selain stdout/stderr → selalu item baru
+                    if (line.type != QuickShellViewModel.OutputType.TYPE_STDOUT && line.type != QuickShellViewModel.OutputType.TYPE_STDERR) {
+                        logs.add(line.copy(completed = true))
+                        return@collect
+                    }
+
+                    val hasNewline =
+                        raw.contains('\n')
+
+                    val hasCarriageReturn =
+                        raw.contains('\r') && !raw.contains('\n')
+
+                    val clean = raw.trimEnd('\n', '\r')
+
+                    val last = logs.lastOrNull()
+
+                    when {
+
+                        /* ===============================
+                           CASE 1: CARRIAGE RETURN (\r)
+                           overwrite baris terakhir
+                           =============================== */
+                        hasCarriageReturn && last != null &&
+                                !last.completed &&
+                                last.type == line.type -> {
+
+                            val i = logs.lastIndex
+                            logs[i] = last.copy(
+                                output = clean,
+                                completed = false
+                            )
+                        }
+
+                        /* ===============================
+                           CASE 2: LANJUT BARIS SEBELUMNYA
+                           =============================== */
+                        last != null &&
+                                !last.completed &&
+                                last.type == line.type -> {
+
+                            val i = logs.lastIndex
+                            logs[i] = last.copy(
+                                output = last.output + clean,
+                                completed = hasNewline
+                            )
+                        }
+
+                        /* ===============================
+                           CASE 3: BARIS BARU
+                           =============================== */
+                        else -> {
+                            logs.add(
+                                QuickShellViewModel.Output(
+                                    type = line.type,
+                                    output = clean,
+                                    completed = hasNewline
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
-            val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
-            val fontSizeSp = MaterialTheme.typography.labelSmall.fontSize.value
-            val density = LocalDensity.current
-            val topPaddingPx = with(density) { 70.dp.roundToPx() }
-            val bottomPaddingPx = with(density) { 22.dp.roundToPx() }
 
-            AndroidView(
+            val hScroll = rememberScrollState()
+
+            val context = LocalContext.current
+
+            SelectionContainer(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp),
-                factory = { ctx ->
-                    OutputView(ctx).also { view ->
-                        view.onOversizedCopy = { text ->
-                            scope.launch { saveTextToDownload(ctx, text, snackBarHost) }
+                    .padding(horizontal = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .horizontalScroll(hScroll)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                    ) {
+                        item {
+                            Spacer(modifier = Modifier.size(70.dp))
                         }
-                        view.onScrollDelta = { delta ->
-                            if (!viewModel.isRunning) {
-                                if (delta > 0) fabVisible = false
-                                else if (delta < 0) fabVisible = true
-                            }
+                        items(logs) { line ->
+                            if (!PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
+                                    .loadState(context, line.type, true)
+                            ) return@items
+                            BasicText(
+                                text = line.output.parseAsAnsiAnnotatedString(),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    lineHeight = MaterialTheme.typography.labelSmall.fontSize, // samain dengan fontSize
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                softWrap = false,
+                            )
                         }
-                        outputView = view
-                    }
-                },
-                update = { view ->
-                    view.style(fontSizeSp, textColor, topPaddingPx, bottomPaddingPx)
-                }
-            )
 
-            LaunchedEffect(outputView) {
-                val view = outputView ?: return@LaunchedEffect
-                var seenEpoch = -1
-                snapshotFlow { renderEpoch to logTick }
-                    .collect { (epoch, _) ->
-                        var full = epoch != seenEpoch
-                        seenEpoch = epoch
-                        val outputPrefs = PrefsEnumHelper<QuickShellViewModel.OutputType>("output_")
-                        do {
-                            val dropped = dropCounter[0]
-                            dropCounter[0] = 0
-                            val more = try {
-                                view.render(
-                                    logs,
-                                    { outputPrefs.loadState(context, it.type, true) },
-                                    full,
-                                    dropped,
-                                    OUTPUT_MAX_RENDER_LINES
-                                )
-                            } catch (e: Exception) {
-                                Log.e("QuickShell", "render failed", e)
-                                view.reset()
-                                seenEpoch = -1
-                                false
-                            } catch (e: OutOfMemoryError) {
-                                view.reset()
-                                logs.clear()
-                                retainedChars[0] = 0L
-                                seenEpoch = -1
-                                false
-                            }
-                            full = false
-                            if (more) delay(1)
-                        } while (more)
+                        item {
+                            Spacer(modifier = Modifier.size(22.dp))
+                        }
                     }
+                }
             }
 
             @SuppressLint("ConfigurationScreenWidthHeight")
@@ -681,176 +718,4 @@ suspend fun saveLogsToDownload(
 }
 
 
-private const val OUTPUT_MAX_BATCH = 2048
-private const val OUTPUT_BATCH_PAUSE_MS = 4L
-private const val OUTPUT_MAX_RENDER_LINES = 2000
-private const val OUTPUT_MAX_RETAINED_CHARS = 2_500_000L
-private const val OUTPUT_TRIM_TARGET_CHARS = 1_800_000L
-private const val OUTPUT_MAX_LINE_CHARS = 20_000
 
-private fun applyOutput(
-    logs: MutableList<QuickShellViewModel.Output>,
-    assembler: LineAssembler,
-    line: QuickShellViewModel.Output
-) {
-    val raw = line.output
-    val isStream = line.type == QuickShellViewModel.OutputType.TYPE_STDOUT ||
-            line.type == QuickShellViewModel.OutputType.TYPE_STDERR
-
-    if (isStream) {
-        if (raw.isEmpty()) return
-    } else if (line.type != QuickShellViewModel.OutputType.TYPE_SPACE && raw.isBlank()) {
-        return
-    }
-
-    if (AnsiFilter.isScreenControl(raw)) {
-        val clean = AnsiFilter.stripAnsi(raw)
-        if (clean.isEmpty()) return
-        if (logs.isEmpty()) {
-            logs.add(
-                QuickShellViewModel.Output(
-                    type = line.type,
-                    output = clean,
-                    completed = false
-                )
-            )
-        } else {
-            val last = logs.last()
-            logs[logs.lastIndex] = last.copy(output = clean)
-        }
-        return
-    }
-
-    if (!isStream) {
-        assembler.closeOpenLine(logs)
-        logs.add(line.copy(completed = true))
-        return
-    }
-
-    assembler.feed(logs, line.type, raw)
-}
-
-private fun trimLogs(logs: MutableList<QuickShellViewModel.Output>, retained: LongArray): Int {
-    if (retained[0] <= OUTPUT_MAX_RETAINED_CHARS) return 0
-    var total = 0L
-    for (entry in logs) total += entry.output.length + 1L
-    retained[0] = total
-    if (total <= OUTPUT_MAX_RETAINED_CHARS) return 0
-
-    var remove = 0
-    var dropped = 0L
-    while (remove < logs.size - 1 && total - dropped > OUTPUT_TRIM_TARGET_CHARS) {
-        dropped += logs[remove].output.length + 1L
-        remove++
-    }
-    logs.subList(0, remove).clear()
-    retained[0] = total - dropped
-    return remove
-}
-
-private class LineAssembler {
-    private val pendingCr = HashMap<QuickShellViewModel.OutputType, Boolean>()
-
-    fun closeOpenLine(logs: MutableList<QuickShellViewModel.Output>) {
-        val last = logs.lastOrNull() ?: return
-        if (!last.completed) logs[logs.lastIndex] = last.copy(completed = true)
-    }
-
-    fun feed(
-        logs: MutableList<QuickShellViewModel.Output>,
-        type: QuickShellViewModel.OutputType,
-        chunk: String
-    ) {
-        var existing = logs.lastOrNull()
-        if (existing != null && !existing.completed && existing.type != type) {
-            closeOpenLine(logs)
-            existing = null
-        }
-        if (existing != null && existing.completed) existing = null
-
-        val open = StringBuilder(existing?.output ?: "")
-        var hasOpen = existing != null
-        var carriage = pendingCr[type] == true
-        val finished = ArrayList<String>()
-
-        for (ch in chunk) {
-            if (carriage) {
-                carriage = false
-                if (ch == '\n') {
-                    finished.add(open.toString())
-                    open.setLength(0)
-                    hasOpen = false
-                    continue
-                }
-                open.setLength(0)
-                hasOpen = true
-            }
-            when (ch) {
-                '\n' -> {
-                    finished.add(open.toString())
-                    open.setLength(0)
-                    hasOpen = false
-                }
-
-                '\r' -> carriage = true
-
-                else -> {
-                    open.append(ch)
-                    hasOpen = true
-                    if (open.length >= OUTPUT_MAX_LINE_CHARS) {
-                        finished.add(open.toString())
-                        open.setLength(0)
-                        hasOpen = false
-                    }
-                }
-            }
-        }
-        pendingCr[type] = carriage
-
-        for ((index, text) in finished.withIndex()) {
-            if (index == 0 && existing != null) {
-                logs[logs.lastIndex] = existing.copy(output = text, completed = true)
-            } else if (text.isNotBlank()) {
-                logs.add(QuickShellViewModel.Output(type, text, completed = true))
-            }
-        }
-
-        if (hasOpen) {
-            val text = open.toString()
-            if (finished.isEmpty() && existing != null) {
-                logs[logs.lastIndex] = existing.copy(output = text, completed = false)
-            } else {
-                logs.add(QuickShellViewModel.Output(type, text, completed = false))
-            }
-        }
-    }
-}
-
-
-suspend fun saveTextToDownload(
-    context: Context,
-    text: String,
-    snackbar: SnackbarHostState
-) {
-    val logSaved = context.getString(R.string.log_saved_to)
-    val logFailed = context.getString(R.string.failed_to_save_log)
-    Toast.makeText(context, R.string.quickshell_copy_too_large, Toast.LENGTH_LONG).show()
-
-    val format = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss", Locale.getDefault())
-    val date = format.format(Date())
-    val baseDir = PathHelper.getPath(AxeronApiConstant.folder.PARENT_LOG)
-    val file = File(baseDir, "QuickShell_selection_${date}.log")
-
-    try {
-        withContext(Dispatchers.IO) {
-            if (!baseDir.exists()) baseDir.mkdirs()
-            val fos = Axeron.newFileService()
-                .getStreamSession(file.absolutePath, true, false).outputStream
-            fos.write(text.toByteArray())
-            fos.flush()
-        }
-        snackbar.showSnackbar(logSaved.format(file.absolutePath))
-    } catch (e: Exception) {
-        snackbar.showSnackbar(logFailed.format(e.message))
-    }
-}
