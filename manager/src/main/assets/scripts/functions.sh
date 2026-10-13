@@ -2,34 +2,61 @@
 
 AX_SYSTEM_DIRS="${AX_SYSTEM_DIRS:-/system/bin /system/xbin /vendor/bin}"
 
-# Prefer the phone's own tools (toybox) over BusyBox applets by default.
-# When the installer shell is BusyBox ash with ASH_STANDALONE enabled, every
-# applet (awk, base64, grep, ...) silently wins over /system/bin. Turn that
-# off here so plain PATH lookup is used; BusyBox in $AXERONBIN stays as the
-# last-resort fallback for tools the phone does not ship.
-# The subshell probe keeps shells without this option (mksh, toybox sh) safe.
-unset ASH_STANDALONE
-(set +o standalone) 2>/dev/null && set +o standalone
-
+# Resolve the phone's own copy of a tool (not BusyBox) into AX_TOOL_PATH.
 ax_system_tool() {
   local name="$1" dir target
+  AX_TOOL_PATH=
   for dir in $AX_SYSTEM_DIRS; do
     [ -x "$dir/$name" ] || continue
-    target=$(readlink -f "$dir/$name" 2>/dev/null)
-    case "$target" in
-      */busybox*) continue ;;
-    esac
-    echo "$dir/$name"
+    if [ -L "$dir/$name" ]; then
+      target=$(readlink -f "$dir/$name" 2>/dev/null)
+      case "$target" in
+        */busybox*) continue ;;
+      esac
+    fi
+    AX_TOOL_PATH="$dir/$name"
     return 0
   done
   return 1
 }
 
-for ax_tool in cat cp mv rm mkdir rmdir touch chmod chown ln ls sed grep head tail tr wc cut sort basename dirname dos2unix unzip; do
-  ax_path=$(ax_system_tool "$ax_tool") || continue
-  eval "$ax_tool() { \"$ax_path\" \"\$@\"; }"
-done
-unset ax_tool ax_path
+# Names BusyBox ash may resolve internally (applets). Used when
+# `busybox --list` is not reachable.
+AX_APPLETS_FALLBACK="awk base64 basename blkdiscard blkid blockdev brctl bunzip2 bzcat bzip2 cal cat chattr chcon chgrp chmod chown chroot chrt cksum clear cmp comm cp cpio cut date dd devmem df diff dirname dmesg dos2unix du egrep env expand expr fallocate fgrep find flock free fsync getenforce getopt grep groups gunzip gzip head hostname hwclock id ifconfig inotifyd insmod install ionice ip killall ln losetup ls lsattr lsmod lsof lspci lsusb md5sum microcom mkdir mke2fs mkfifo mknod mkswap mktemp modinfo modprobe more mount mountpoint mv nc netstat nice nl nohup nproc nsenter od paste patch pgrep pidof ping ping6 pkill pmap printenv ps readlink realpath renice rm rmdir rmmod rtcwake runcon sed seq setenforce setfattr setsid sh sha1sum sha256sum sha512sum sleep sort split stat strings stty svc swapoff swapon sync sysctl tac tail tar tc tee timeout top touch tr truncate tty tune2fs umount uname uniq unix2dos unlink unshare unzip uptime usleep uudecode uuencode vi watch wc which whoami xargs xxd zcat"
+
+# Prefer the phone's own tools over BusyBox applets, by default and without
+# any flag in the plugin. BusyBox stays reachable only for tools the phone
+# does not ship (it is last in PATH, via $AXERONBIN).
+#  1. switch BusyBox ash "standalone" mode off (applets would beat PATH);
+#  2. pin every applet that has a system binary to that binary, because a
+#     shell function always wins over an applet, whatever the shell mode is.
+ax_prefer_system_tools() {
+  local list name bb
+  unset ASH_STANDALONE
+  (set +o standalone) 2>/dev/null && set +o standalone
+
+  list=
+  for bb in "${AXERONLIB:+$AXERONLIB/libbusybox.so}" busybox; do
+    [ -n "$bb" ] || continue
+    list=$("$bb" --list 2>/dev/null) && [ -n "$list" ] && break
+    list=
+  done
+  [ -n "$list" ] || list=$AX_APPLETS_FALLBACK
+
+  for name in $list; do
+    case "$name" in
+      # shell builtins: keep them builtin (also what the phone's sh does)
+      '['|'[['|echo|printf|test|true|false|kill|pwd|time|ulimit|cd|exec|eval|command|type|umask|wait|read|set|unset|exit|export|alias|unalias|trap|shift|return|break|continue|local) continue ;;
+    esac
+    ax_system_tool "$name" || continue
+    case "$name" in
+      *[!A-Za-z0-9_]*) alias "$name=\"$AX_TOOL_PATH\" " ;;
+      *) eval "$name() { \"$AX_TOOL_PATH\" \"\$@\"; }" ;;
+    esac
+  done
+}
+
+ax_prefer_system_tools
 
 ui_print() {
   echo "$1"
@@ -208,8 +235,9 @@ install_plugin() {
     set_perm_recursive "$MODPATH" 2000 2000 0755 0755
   fi
 
-  # Opt-in: a plugin can still force BusyBox applets by declaring
-  # ASH_STANDALONE=1 in its customize.sh (same rule as action/service scripts).
+  # System tools first again; a plugin can opt in to BusyBox applets by
+  # declaring ASH_STANDALONE=1 in its customize.sh (same rule as action/service).
+  ax_prefer_system_tools
   if grep -q '^ASH_STANDALONE=1$' "$MODPATH"/customize.sh 2>/dev/null; then
     ASH_STANDALONE=1
     export ASH_STANDALONE
