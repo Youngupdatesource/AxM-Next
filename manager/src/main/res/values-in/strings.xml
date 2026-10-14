@@ -250,4 +250,7 @@
     <string name="command_success">Selesai</string>
     <string name="command_waiting_output">Menunggu output…</string>
     <string name="command_word_wrap">Bungkus teks</string>
+    <string name="home_banner_adjust">Atur posisi</string>
+    <string name="home_banner_adjust_desc">Pilih bagian gambar yang ditampilkan</string>
+    <string name="home_banner_adjust_hint">Geser gambar untuk memilih bagian yang tampil di banner</string>
 </resources>

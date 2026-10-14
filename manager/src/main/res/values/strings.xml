@@ -250,4 +250,7 @@
     <string name="command_success">Completed</string>
     <string name="command_waiting_output">Waiting for output…</string>
     <string name="command_word_wrap">Word wrap</string>
+    <string name="home_banner_adjust">Adjust position</string>
+    <string name="home_banner_adjust_desc">Choose which part of the image is shown</string>
+    <string name="home_banner_adjust_hint">Drag the image to choose which part is shown on the banner</string>
 </resources>

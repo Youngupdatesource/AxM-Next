@@ -96,6 +96,7 @@ import frb.axeron.api.core.Starter
 import frb.axeron.manager.BuildConfig
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.component.ExtraLabel
+import frb.axeron.manager.ui.component.STATUS_BANNER_ASPECT
 import frb.axeron.manager.ui.component.StatusBannerImage
 import frb.axeron.manager.ui.component.rememberStatusBannerFile
 import frb.axeron.manager.ui.component.ExtraLabelDefaults
@@ -511,7 +512,7 @@ fun StatusCard(
                         Spacer(
                             Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
+                                .aspectRatio(STATUS_BANNER_ASPECT)
                         )
                         StatusBannerImage(
                             file = bannerFile,

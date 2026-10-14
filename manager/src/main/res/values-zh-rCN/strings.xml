@@ -229,4 +229,7 @@
     <string name="shortcut_image_failed">图片加载失败</string>
     <string name="shortcut_no_webui">此插件没有 WebUI</string>
     <string name="shortcut_icon_hint">最终形状由桌面启动器决定（圆形、圆角方形等）</string>
+    <string name="home_banner_adjust">调整位置</string>
+    <string name="home_banner_adjust_desc">选择图片显示的区域</string>
+    <string name="home_banner_adjust_hint">拖动图片以选择横幅中显示的区域</string>
 </resources>
