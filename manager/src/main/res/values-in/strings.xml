@@ -242,4 +242,12 @@
     <string name="terminal_unlimited">Baris tanpa batas</string>
     <string name="terminal_unlimited_desc">Simpan semua baris, bukan hanya 20.000 terakhir. Baris disimpan di cache aplikasi (disk), jadi output besar seperti dumpsys tetap bisa di-scroll</string>
     <string name="terminal_view_options">Tampilan output</string>
+
+    <string name="activation_copy_log">Salin log</string>
+    <string name="command_exit_code">exit %d</string>
+    <string name="command_failed">Gagal</string>
+    <string name="command_running">Berjalan…</string>
+    <string name="command_success">Selesai</string>
+    <string name="command_waiting_output">Menunggu output…</string>
+    <string name="command_word_wrap">Bungkus teks</string>
 </resources>
