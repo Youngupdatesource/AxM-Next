@@ -63,4 +63,4 @@ fun AxManagerTheme(
 @Composable
 fun cardContainerColor(
     fallback: Color = Color.Unspecified
-): Color = MaterialTheme.colorScheme.surfaceContainer
+): Color = MaterialTheme.colorScheme.surfaceContainerHighest

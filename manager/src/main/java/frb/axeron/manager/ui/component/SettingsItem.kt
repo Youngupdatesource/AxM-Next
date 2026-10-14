@@ -287,7 +287,7 @@ fun CheckBoxText(
     Card(
         colors = CardDefaults.cardColors(
             containerColor = when (checked) {
-                true -> MaterialTheme.colorScheme.surfaceContainerHighest
+                true -> MaterialTheme.colorScheme.secondaryContainer
                 false -> MaterialTheme.colorScheme.surfaceContainerLow
             },
             contentColor = MaterialTheme.colorScheme.onSurface
