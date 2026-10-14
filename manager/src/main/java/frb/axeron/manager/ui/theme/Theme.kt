@@ -59,7 +59,8 @@ fun AxManagerTheme(
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun cardContainerColor(
-    fallback: Color = MaterialTheme.colorScheme.surfaceContainer
-): Color = fallback
+    fallback: Color = Color.Unspecified
+): Color = MaterialTheme.colorScheme.surfaceContainer
