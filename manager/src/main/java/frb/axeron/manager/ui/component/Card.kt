@@ -145,7 +145,7 @@ private fun StatTile(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {

@@ -95,7 +95,8 @@ fun AppearanceScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
             modifier = Modifier
                 .padding(paddingValues)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(top = 4.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val context = LocalContext.current

@@ -34,6 +34,8 @@ import frb.axeron.manager.ui.component.SearchAppBar
 import frb.axeron.manager.ui.component.UseLifecycle
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.Checkbox
@@ -90,6 +92,11 @@ fun PrivilegeScreen(
                             onDismissRequest = { menuOpen = false }
                         ) {
                             DropdownMenuItem(
+                                // clip sebelum clickable -> highlight saat ditekan/ditahan ikut
+                                // melengkung (full pill), bukan persegi panjang.
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .clip(RoundedCornerShape(16.dp)),
                                 text = { Text(stringResource(R.string.privilege_filter_shizuku)) },
                                 leadingIcon = {
                                     Checkbox(

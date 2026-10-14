@@ -2,15 +2,24 @@ package frb.axeron.manager.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import frb.axeron.manager.ui.viewmodel.SettingsViewModel
+
+/** Radius sudut kartu yang dipakai seragam di seluruh aplikasi. */
+val CardCornerRadius = 28.dp
+
+/** Shape kartu seragam. ElevatedCard/Card memakai Shapes.medium, jadi cukup diatur di sini. */
+val AxShapes = Shapes(medium = RoundedCornerShape(CardCornerRadius))
 
 fun hexToColor(hex: String): Color {
     val cleanHex = hex.removePrefix("#")
@@ -54,7 +63,8 @@ fun AxManagerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography
+        typography = Typography,
+        shapes = AxShapes
     ) {
         contentCompose(settingsViewModel)
     }
@@ -76,7 +86,9 @@ fun cardContainerColor(
 ): Color {
     val scheme = MaterialTheme.colorScheme
     return if (scheme.background.luminance() < 0.5f) {
-        scheme.surfaceContainer.blend(scheme.onSurface, 0.06f)
+        // Ditambah sedikit biru (+2/255) supaya kartu terasa lebih biru: #24252C -> #24252E.
+        val base = scheme.surfaceContainer.blend(scheme.onSurface, 0.06f)
+        base.copy(blue = (base.blue + 2f / 255f).coerceAtMost(1f))
     } else {
         scheme.surfaceContainerHighest
     }

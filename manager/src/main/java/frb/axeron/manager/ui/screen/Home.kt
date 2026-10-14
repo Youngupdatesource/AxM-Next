@@ -761,7 +761,7 @@ fun InfoCard(activateViewModel: ActivateViewModel) {
     val kernel = remember { System.getProperty("os.version").orEmpty().ifBlank { "-" } }
 
     Card(
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = Modifier.fillMaxWidth()
