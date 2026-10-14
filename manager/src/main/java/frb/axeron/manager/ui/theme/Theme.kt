@@ -7,6 +7,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import frb.axeron.manager.ui.viewmodel.SettingsViewModel
@@ -59,8 +60,24 @@ fun AxManagerTheme(
     }
 }
 
+/**
+ * Warna kartu: sedikit lebih terang dari top bar (saat di-scroll) dan bottom bar, tapi tidak sama
+ * dengan keduanya.
+ *
+ * Kedua bar memakai surfaceContainer. Di tema gelap, warna kartu dihitung relatif terhadap warna
+ * bar itu sendiri (digeser sedikit ke arah onSurface), bukan memilih role surfaceContainer* lain,
+ * karena pada palet dinamis/beberapa ROM role-role itu bisa hampir sama dan kartu jadi menyatu
+ * dengan bar. Tema terang tetap memakai surfaceContainerHighest.
+ */
 @Suppress("UNUSED_PARAMETER")
 @Composable
 fun cardContainerColor(
     fallback: Color = Color.Unspecified
-): Color = MaterialTheme.colorScheme.surfaceContainerHighest
+): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.background.luminance() < 0.5f) {
+        scheme.surfaceContainer.blend(scheme.onSurface, 0.06f)
+    } else {
+        scheme.surfaceContainerHighest
+    }
+}
