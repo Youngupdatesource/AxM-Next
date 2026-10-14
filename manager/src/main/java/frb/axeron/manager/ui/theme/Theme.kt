@@ -10,21 +10,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import frb.axeron.manager.ui.viewmodel.SettingsViewModel
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
-
-val CardColorDark = Color(0xFF24252E)
-val CardColorLight = Color(0xFFE2E1ED)
-
-val LocalCardColor = staticCompositionLocalOf { Color.Unspecified }
-
-@Composable
-fun cardContainerColor(
-    fallback: Color = MaterialTheme.colorScheme.surfaceContainer
-): Color {
-    val custom = LocalCardColor.current
-    return if (custom == Color.Unspecified) fallback else custom
-}
 
 fun hexToColor(hex: String): Color {
     val cleanHex = hex.removePrefix("#")
@@ -62,21 +47,19 @@ fun AxManagerTheme(
             }
         }
 
-        else -> resolveAppColorScheme(darkTheme, customPrimaryColor)
-    }
-
-    val cardColor = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> Color.Unspecified
-        darkTheme -> CardColorDark
-        else -> CardColorLight
+        darkTheme -> getVortexDarkColorScheme(customPrimaryColor)
+        else -> getVortexLightColorScheme(customPrimaryColor)
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography
     ) {
-        CompositionLocalProvider(LocalCardColor provides cardColor) {
-            contentCompose(settingsViewModel)
-        }
+        contentCompose(settingsViewModel)
     }
 }
+
+@Composable
+fun cardContainerColor(
+    fallback: Color = MaterialTheme.colorScheme.surfaceContainer
+): Color = fallback

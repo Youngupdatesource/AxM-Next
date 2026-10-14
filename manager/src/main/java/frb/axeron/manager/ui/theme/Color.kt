@@ -58,35 +58,7 @@ fun Color.toHexString(includeAlpha: Boolean = true): String {
 
 val AMOLED_BLACK: Color = Color(0xFF000000)
 
-val KSU_PRIMARY = Color(0xFFBEC4EE)
-val KSU_PRIMARY_LIGHT = Color(0xFFB7BDF8)
-val KSU_SECONDARY_LIGHT = Color(0xFFA6DA95)
-val KSU_PRIMARY_DARK = Color(0xFF7DC4E4)
-val KSU_SECONDARY_DARK = Color(0xFFF5BDE6)
-
-val basePrimaryDefault = KSU_PRIMARY
-
-val KsuDarkColorScheme = darkColorScheme(
-    primary = KSU_PRIMARY,
-    onPrimary = Color(0xFF383E62),
-    secondary = Color(0xFFC4C5E8),
-    onSecondaryContainer = Color(0xFFE0E1FF),
-    onSurfaceVariant = Color(0xFFC3C6D7),
-    tertiary = KSU_SECONDARY_DARK
-)
-
-val KsuLightColorScheme = lightColorScheme(
-    primary = KSU_PRIMARY,
-    onPrimary = Color(0xFF383E62),
-    secondary = KSU_PRIMARY_LIGHT,
-    tertiary = KSU_SECONDARY_LIGHT
-)
-
-fun resolveAppColorScheme(darkTheme: Boolean, primary: Color): ColorScheme = when {
-    primary == basePrimaryDefault -> if (darkTheme) KsuDarkColorScheme else KsuLightColorScheme
-    darkTheme -> getVortexDarkColorScheme(primary)
-    else -> getVortexLightColorScheme(primary)
-}
+val basePrimaryDefault = Color(0xFFFFB487)
 
 //private val baseSecondaryDefault = Color(0xFFDE5900)
 //private val baseTertiaryDefault = Color(0xFFAD6804)

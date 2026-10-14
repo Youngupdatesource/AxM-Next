@@ -229,4 +229,17 @@
     <string name="shortcut_image_failed">Failed to load image</string>
     <string name="shortcut_no_webui">This plugin has no WebUI</string>
     <string name="shortcut_icon_hint">The launcher decides the final shape (circle, squircle, and so on)</string>
+
+    <string name="terminal_goto">Go</string>
+    <string name="terminal_goto_range">Lines %1$d–%2$d · line or line:column</string>
+    <string name="terminal_goto_title">Go to line</string>
+    <string name="terminal_line_numbers">Line numbers</string>
+    <string name="terminal_line_numbers_desc">Show the line number beside each line</string>
+    <string name="terminal_line_short">Ln</string>
+    <string name="terminal_scroll_bottom">Scroll to bottom</string>
+    <string name="terminal_scroll_top">Scroll to top</string>
+    <string name="terminal_text_size">Text size</string>
+    <string name="terminal_unlimited">Unlimited lines</string>
+    <string name="terminal_unlimited_desc">Keep every line instead of the last 20,000. Lines are stored in app cache on disk, so huge output like dumpsys stays scrollable</string>
+    <string name="terminal_view_options">Output view</string>
 </resources>

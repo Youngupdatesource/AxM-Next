@@ -1,8 +1,6 @@
 package frb.axeron.manager.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
-import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -13,16 +11,6 @@ import frb.axeron.api.core.AxeronSettings
 import frb.axeron.manager.ui.theme.basePrimaryDefault
 import frb.axeron.manager.ui.theme.toHexString
 import kotlinx.coroutines.launch
-
-private fun resolveInitialDynamicColor(application: Application): Boolean {
-    val current = AxeronSettings.getEnableDynamicColor()
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return current
-    val marker = application.getSharedPreferences("axm_theme", Context.MODE_PRIVATE)
-    if (marker.getBoolean("dynamic_default_applied", false)) return current
-    marker.edit().putBoolean("dynamic_default_applied", true).apply()
-    if (!current) AxeronSettings.setEnableDynamicColor(true)
-    return true
-}
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 //    private val prefs = AxeronSettings.getPreferences()
@@ -50,7 +38,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         private set
 
     var isDynamicColorEnabled by mutableStateOf(
-        resolveInitialDynamicColor(application)
+        AxeronSettings.getEnableDynamicColor()
     )
         private set
 
