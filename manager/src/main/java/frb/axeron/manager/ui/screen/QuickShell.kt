@@ -303,7 +303,6 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     bottom = 22.dp
                 ),
                 jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
-                selectionBarPadding = PaddingValues(bottom = 0.dp),
                 modifier = Modifier.fillMaxSize()
             )
 

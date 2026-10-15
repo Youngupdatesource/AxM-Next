@@ -1,7 +1,5 @@
 package frb.axeron.manager.ui.component
 
-import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -10,18 +8,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.DragInteraction
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -44,12 +37,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,13 +71,10 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -101,18 +90,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
-import frb.axeron.api.utils.AnsiFilter
 import frb.axeron.manager.R
-import frb.axeron.manager.ui.util.ClipboardUtil
 import frb.axeron.manager.ui.util.TerminalBuffer
 import frb.axeron.manager.ui.util.TerminalPrefs
 import androidx.compose.ui.graphics.TransformOrigin
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import kotlinx.coroutines.withContext
 
 /** Default text style for command output, scaled by [TerminalPrefs.textScale]. */
 @Composable
@@ -145,7 +130,6 @@ fun <K : Any> TerminalOutput(
     filter: ((K) -> Boolean)? = null,
     color: @Composable (K) -> Color = { MaterialTheme.colorScheme.onSurfaceVariant },
     jumpButtonPadding: PaddingValues = PaddingValues(0.dp),
-    selectionBarPadding: PaddingValues = jumpButtonPadding,
     state: LazyListState = rememberLazyListState(),
 ) {
     val showLineNumbers = TerminalPrefs.lineNumbers
@@ -224,31 +208,6 @@ fun <K : Any> TerminalOutput(
     var pillActive by remember { mutableStateOf(false) }
     var pillTick by remember { mutableIntStateOf(0) }
     var thumbDragging by remember { mutableStateOf(false) }
-
-    // ---- line selection (replaces SelectionContainer, which crashes on LazyColumn recycling) ----
-    var selAnchor by remember { mutableStateOf<Long?>(null) }
-    var selExtent by remember { mutableStateOf<Long?>(null) }
-    val selecting = selAnchor != null
-    val selRange by remember {
-        derivedStateOf {
-            val a = selAnchor
-            val e = selExtent
-            val v = view
-            if (a == null || e == null || v.count == 0) null
-            else {
-                val ia = v.indexOf(a)
-                val ie = v.indexOf(e)
-                minOf(ia, ie)..maxOf(ia, ie)
-            }
-        }
-    }
-    val selectionColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    val haptics = LocalHapticFeedback.current
-    val appContext = LocalContext.current
-    BackHandler(enabled = selecting) {
-        selAnchor = null
-        selExtent = null
-    }
     val scope = rememberCoroutineScope()
 
     val canScroll by remember {
@@ -257,7 +216,7 @@ fun <K : Any> TerminalOutput(
     val showScrollbar = canScroll && view.count > SCROLLBAR_MIN_LINES
 
     Box(modifier) {
-        Box(Modifier.fillMaxSize()) {
+        SelectionContainer(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = state,
                 contentPadding = contentPadding,
@@ -279,7 +238,6 @@ fun <K : Any> TerminalOutput(
                     val line = remember(position, version) { buffer.lineAt(position) }
                         ?: return@items
                     val mark = highlight?.takeIf { it.line == line.number }
-                    val inSelection = selRange?.let { i in it } == true
                     val parsed = remember(line.text) { line.text.toAnsiString() }
                     val text = remember(parsed, mark) {
                         if (mark?.column == null) parsed
@@ -288,31 +246,17 @@ fun <K : Any> TerminalOutput(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(
-                                when {
-                                    inSelection -> Modifier.background(selectionColor)
-                                    mark != null -> Modifier.background(rowHighlight)
-                                    else -> Modifier
-                                }
-                            )
-                            .combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onLongClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    selAnchor = position
-                                    selExtent = position
-                                },
-                                onClick = { if (selAnchor != null) selExtent = position }
-                            )
+                            .then(if (mark != null) Modifier.background(rowHighlight) else Modifier)
                     ) {
                         if (showLineNumbers) {
-                            BasicText(
-                                text = line.number.toString(),
-                                style = gutterStyle,
-                                maxLines = 1,
-                                modifier = Modifier.width(gutterWidth)
-                            )
+                            DisableSelection {
+                                BasicText(
+                                    text = line.number.toString(),
+                                    style = gutterStyle,
+                                    maxLines = 1,
+                                    modifier = Modifier.width(gutterWidth)
+                                )
+                            }
                             Spacer(Modifier.width(10.dp))
                         }
                         BasicText(
@@ -362,64 +306,6 @@ fun <K : Any> TerminalOutput(
             snapshotFlow { state.isScrollInProgress }.first { !it }
             delay(PILL_IDLE_MS)
             pillActive = false
-        }
-
-        AnimatedVisibility(
-            visible = selecting,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(selectionBarPadding)
-                .padding(start = 12.dp, end = 92.dp, bottom = 12.dp)
-        ) {
-            TerminalSelectionBar(
-                count = selRange?.let { it.last - it.first + 1 } ?: 0,
-                onClose = {
-                    selAnchor = null
-                    selExtent = null
-                },
-                onSelectAll = {
-                    val v = view
-                    if (v.count > 0) {
-                        selAnchor = v.positionAt(0)
-                        selExtent = v.positionAt(v.count - 1)
-                    }
-                },
-                onCopy = {
-                    val range = selRange
-                    val v = view
-                    if (range != null) {
-                        scope.launch {
-                            val (text, lines) = withContext(Dispatchers.Default) {
-                                val sb = StringBuilder()
-                                var copied = 0
-                                for (i in range) {
-                                    val plain = buffer.lineAt(v.positionAt(i))
-                                        ?.let { AnsiFilter.stripAnsi(it.text) } ?: continue
-                                    if (sb.length + plain.length + 1 > MAX_COPY_CHARS) break
-                                    if (copied > 0) sb.append('\n')
-                                    sb.append(plain)
-                                    copied++
-                                }
-                                sb.toString() to copied
-                            }
-                            val total = range.last - range.first + 1
-                            val ok = lines > 0 && ClipboardUtil.put(appContext, text)
-                            val message = when {
-                                !ok -> appContext.getString(R.string.failed)
-                                lines < total -> appContext.getString(R.string.terminal_copy_truncated, lines)
-                                else -> appContext.getString(R.string.copied)
-                            }
-                            Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
-                            if (ok && lines == total) {
-                                selAnchor = null
-                                selExtent = null
-                            }
-                        }
-                    }
-                }
-            )
         }
 
         val currentLine by remember {
@@ -491,9 +377,6 @@ fun <K : Any> TerminalOutput(
 
 private const val SCROLLBAR_MIN_LINES = 200
 private const val PILL_IDLE_MS = 1800L
-
-/** Stay well below the ~1 MB binder limit of the clipboard. */
-private const val MAX_COPY_CHARS = 700_000
 
 /** Which buffer positions are on screen, in order. */
 @Immutable
@@ -627,38 +510,6 @@ private fun FastScrollbar(
                 .clip(CircleShape)
                 .background(thumbColor.copy(alpha = alpha))
         )
-    }
-}
-
-@Composable
-private fun TerminalSelectionBar(
-    count: Int,
-    onClose: () -> Unit,
-    onSelectAll: () -> Unit,
-    onCopy: () -> Unit,
-) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shadowElevation = 3.dp
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
-            }
-            Text(
-                text = stringResource(R.string.terminal_selected_lines, count),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.widthIn(min = 48.dp)
-            )
-            IconButton(onClick = onSelectAll) {
-                Icon(Icons.Filled.SelectAll, contentDescription = stringResource(R.string.terminal_select_all))
-            }
-            IconButton(onClick = onCopy) {
-                Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.copy))
-            }
-        }
     }
 }
 
