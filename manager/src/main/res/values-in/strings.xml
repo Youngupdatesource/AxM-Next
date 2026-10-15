@@ -255,4 +255,7 @@
     <string name="home_banner_adjust_hint">Geser gambar untuk memilih bagian yang tampil di banner</string>
     <string name="settings_editor_search_all">Cari di semua pengaturan</string>
     <string name="settings_editor_no_results">Tidak ada pengaturan yang cocok</string>
+    <string name="terminal_selected_lines">%1$d baris</string>
+    <string name="terminal_select_all">Pilih semua</string>
+    <string name="terminal_copy_truncated">Hanya %1$d baris pertama yang disalin (batas ukuran clipboard)</string>
 </resources>

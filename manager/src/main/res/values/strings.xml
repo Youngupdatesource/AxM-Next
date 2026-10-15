@@ -255,4 +255,7 @@
     <string name="home_banner_adjust_hint">Drag the image to choose which part is shown on the banner</string>
     <string name="settings_editor_search_all">Search all settings</string>
     <string name="settings_editor_no_results">No settings match your search</string>
+    <string name="terminal_selected_lines">%1$d lines</string>
+    <string name="terminal_select_all">Select all</string>
+    <string name="terminal_copy_truncated">Copied the first %1$d lines (clipboard size limit)</string>
 </resources>
