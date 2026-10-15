@@ -5,6 +5,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.TextFieldColors
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
@@ -92,4 +94,21 @@ fun cardContainerColor(
     } else {
         scheme.surfaceContainerHighest
     }
+}
+
+@Composable
+fun insetContainerColor(): Color = MaterialTheme.colorScheme.surfaceContainer
+
+@Composable
+fun insetTextFieldColors(): TextFieldColors {
+    val container = insetContainerColor()
+    return TextFieldDefaults.colors(
+        focusedIndicatorColor = Color.Transparent,
+        unfocusedIndicatorColor = Color.Transparent,
+        disabledIndicatorColor = Color.Transparent,
+        focusedContainerColor = container,
+        unfocusedContainerColor = container,
+        disabledContainerColor = container,
+        errorContainerColor = container
+    )
 }

@@ -253,4 +253,6 @@
     <string name="home_banner_adjust">Atur posisi</string>
     <string name="home_banner_adjust_desc">Pilih bagian gambar yang ditampilkan</string>
     <string name="home_banner_adjust_hint">Geser gambar untuk memilih bagian yang tampil di banner</string>
+    <string name="settings_editor_search_all">Cari di semua pengaturan</string>
+    <string name="settings_editor_no_results">Tidak ada pengaturan yang cocok</string>
 </resources>

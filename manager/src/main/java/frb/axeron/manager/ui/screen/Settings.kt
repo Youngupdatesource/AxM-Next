@@ -40,7 +40,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -81,6 +80,8 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import frb.axeron.adb.util.AdbEnvironment
 import frb.axeron.api.Axeron
 import frb.axeron.manager.R
+import frb.axeron.manager.ui.theme.cardContainerColor
+import frb.axeron.manager.ui.theme.insetTextFieldColors
 import frb.axeron.manager.ui.component.ConfirmResult
 import frb.axeron.manager.ui.component.SettingsItem
 import frb.axeron.manager.ui.component.SettingsItemType
@@ -261,12 +262,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                                         }
                                     }
                                 },
-                                colors = TextFieldDefaults.colors(
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                                    disabledIndicatorColor = Color.Transparent
-                                ),
+                                colors = insetTextFieldColors(),
                                 shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number
@@ -388,7 +384,7 @@ fun DeveloperInfo(
     if (showDialog) {
         ModalBottomSheet(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            containerColor = cardContainerColor(),
             onDismissRequest = onDismissRequest
         ) {
             Column(

@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import frb.axeron.manager.R
+import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.util.TerminalPrefs
 import kotlin.math.roundToInt
 
@@ -87,7 +88,7 @@ fun TerminalOptionsCard(modifier: Modifier = Modifier) {
 fun TerminalOptionsSheet(onDismissRequest: () -> Unit) {
     ModalBottomSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        containerColor = cardContainerColor(),
         onDismissRequest = onDismissRequest
     ) {
         Column(

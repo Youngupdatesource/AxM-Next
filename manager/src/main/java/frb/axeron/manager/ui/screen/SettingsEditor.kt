@@ -51,11 +51,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -88,6 +89,8 @@ import frb.axeron.manager.R
 import frb.axeron.manager.data.SettingsRepository
 import frb.axeron.manager.ui.component.ConfirmResult
 import frb.axeron.manager.ui.component.SearchAppBar
+import frb.axeron.manager.ui.theme.cardContainerColor
+import frb.axeron.manager.ui.theme.insetTextFieldColors
 import frb.axeron.manager.ui.component.rememberConfirmDialog
 import frb.axeron.manager.ui.util.ClipboardUtil
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
@@ -164,6 +167,45 @@ fun SettingsEditorScreen(
         }
     }
 
+    /* ================= GLOBAL SEARCH ================= */
+
+    val isSearching = query.isNotBlank()
+
+    LaunchedEffect(isSearching) {
+        if (!isSearching) return@LaunchedEffect
+        settingTypes.forEach { type ->
+            if (!dataCache.containsKey(type) && loadingStates[type] != true) {
+                launch {
+                    loadingStates[type] = true
+                    dataCache[type] = settingsRepository.getAll(type)
+                    loadingStates[type] = false
+                }
+            }
+        }
+    }
+
+    val searchResults by remember(query) {
+        derivedStateOf {
+            if (query.isBlank()) {
+                emptyList()
+            } else {
+                settingTypes.flatMap { type ->
+                    dataCache[type].orEmpty().entries
+                        .filter {
+                            it.key.contains(query, true) ||
+                                    it.value?.contains(query, true) == true
+                        }
+                        .sortedBy { it.key }
+                        .map { SearchHit(type, it.key, it.value ?: "") }
+                }
+            }
+        }
+    }
+
+    val searchLoading = isSearching && settingTypes.any {
+        loadingStates[it] == true || !dataCache.containsKey(it)
+    }
+
     /* ================= UI ================= */
 
     Scaffold(
@@ -176,7 +218,7 @@ fun SettingsEditorScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                 },
-                searchLabel = "Search Settings",
+                searchLabel = stringResource(R.string.settings_editor_search_all),
                 searchText = query,
                 onSearchTextChange = { query = it },
                 onClearClick = { query = "" },
@@ -201,7 +243,7 @@ fun SettingsEditorScreen(
             )
 
             AnimatedVisibility(
-                visible = showFab,
+                visible = showFab && !isSearching,
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it }
             ) {
@@ -219,6 +261,22 @@ fun SettingsEditorScreen(
         ) {
             val scope = rememberCoroutineScope()
 
+            if (isSearching) {
+                if (searchLoading) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                    )
+                }
+                SearchResults(
+                    hits = searchResults,
+                    loading = searchLoading,
+                    context = context,
+                    settingsRepository = settingsRepository,
+                    onRefresh = { refresh(it) }
+                )
+            } else {
             RoundedTabRow(
                 selectedType = selectedType,
                 onSelect = {
@@ -326,6 +384,54 @@ fun SettingsEditorScreen(
                     }
                 }
             }
+            }
+        }
+    }
+}
+
+private data class SearchHit(
+    val type: SettingsRepository.SettingType,
+    val key: String,
+    val value: String
+)
+
+@Composable
+private fun SearchResults(
+    hits: List<SearchHit>,
+    loading: Boolean,
+    context: Context,
+    settingsRepository: SettingsRepository,
+    onRefresh: (SettingsRepository.SettingType) -> Unit
+) {
+    if (hits.isEmpty() && !loading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stringResource(R.string.settings_editor_no_results),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        return
+    }
+
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(
+            items = hits,
+            key = { "${it.type.name}/${it.key}" }
+        ) { hit ->
+            TableItem(
+                context = context,
+                key = hit.key,
+                value = hit.value,
+                selectedType = hit.type,
+                settingsRepository = settingsRepository,
+                location = stringResource(hit.type.stringId)
+            ) {
+                onRefresh(hit.type)
+            }
         }
     }
 }
@@ -388,6 +494,7 @@ fun TableItem(
     value: String,
     selectedType: SettingsRepository.SettingType,
     settingsRepository: SettingsRepository,
+    location: String? = null,
     onRefresh: () -> Unit
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -411,7 +518,7 @@ fun TableItem(
             isEditing = true
         },
         colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+            containerColor = cardContainerColor()
         )
     ) {
         Column(
@@ -419,6 +526,21 @@ fun TableItem(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            if (location != null) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                ) {
+                    Text(
+                        text = location,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             SmartWrappedText(
                 text = key,
                 style = MaterialTheme.typography.titleSmall.copy(
@@ -463,7 +585,7 @@ fun TableEditor(
     if (showDialog) {
         ModalBottomSheet(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            containerColor = cardContainerColor(),
             onDismissRequest = {
                 onDismissRequest()
             },
@@ -646,7 +768,7 @@ fun TableEditor(
                 HorizontalDivider(
                     Modifier.padding(vertical = 10.dp),
                     DividerDefaults.Thickness,
-                    MaterialTheme.colorScheme.surfaceContainerHighest
+                    MaterialTheme.colorScheme.outlineVariant
                 )
 
                 if (addTable) {
@@ -663,13 +785,7 @@ fun TableEditor(
                             fontFamily = FontFamily.Monospace,
                         ),
                         singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedIndicatorColor = Color.Transparent,   // garis saat fokus
-                            unfocusedIndicatorColor = Color.Transparent, // garis saat tidak fokus
-                            disabledIndicatorColor = Color.Transparent,   // garis saat disabled
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                        colors = insetTextFieldColors().copy(
                             unfocusedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
@@ -707,13 +823,7 @@ fun TableEditor(
                     ),
                     maxLines = 20,
                     singleLine = false,
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color.Transparent,   // garis saat fokus
-                        unfocusedIndicatorColor = Color.Transparent, // garis saat tidak fokus
-                        disabledIndicatorColor = Color.Transparent,   // garis saat disabled
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    colors = insetTextFieldColors().copy(
                         unfocusedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
