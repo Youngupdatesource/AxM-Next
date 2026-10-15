@@ -365,7 +365,8 @@ fun SettingsEditorScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            state = listState
+                            state = listState,
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
                         ) {
                             items(
                                 items = filtered.entries.toList(),
@@ -452,11 +453,11 @@ fun RoundedTabRow(
         selectedTabIndex = selectedIndex,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
             .clip(RoundedCornerShape(50)), // biar seluruh tabrow bulat
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         indicator = { null },
-        edgePadding = 0.dp,
+        edgePadding = 4.dp,
         divider = {}
     ) {
         SettingsRepository.SettingType.entries.forEachIndexed { index, type ->
@@ -472,12 +473,13 @@ fun RoundedTabRow(
                 selected = isSelected,
                 onClick = { onSelect(type) },
                 modifier = Modifier
+                    .padding(horizontal = 3.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(
                         if (isSelected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceVariant
                     )
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 12.dp),
                 text = {
                     Text(
                         text = stringResource(type.stringId),
