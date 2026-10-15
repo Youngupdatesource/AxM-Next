@@ -34,8 +34,7 @@ AxManager explores a dedicated **ADB environment** on Android: instead of being 
 ### What AxM-Next changes
 
 **UI / UX**
-- Rebranded as **AxM-Next v1.0**, with new launcher icons and a new maintainer profile.
-- Colors follow KernelSU-Next: dynamic color is on by default on Android 12+ (a neutral, wallpaper-based palette), and the fallback palette in light and dark mode is KernelSU-Next's own (blue primary `#8AADF4`). Custom primary colors still work when dynamic color is turned off.
+- Rebranded as **AxM-Next**, with new launcher icons and a new maintainer profile.
 - **Status card banner** with your own image (JPG, PNG, WebP, or animated GIF, up to 8 MB) at a **2:1** ratio, configurable in *Appearance*. After picking an image you can drag it to choose which part of it is shown.
 - Stat tiles and a device info card (device, kernel, Android version, ABI, SELinux context).
 - Swipe left or right to switch between tabs, plus reworked navigation transitions.
@@ -57,8 +56,10 @@ AxManager explores a dedicated **ADB environment** on Android: instead of being 
 - The plugin igniter prefers the phone's own tools (toybox) and only falls back to BusyBox when a tool is missing. Scripts that declare `ASH_STANDALONE=1` still run on BusyBox.
 
 **Quick Shell**
-- Output lines are reassembled across read chunks, so long listings (for example `find /sdcard/Download`) are no longer split in the middle of a line.
-- The output is a native selectable text view. Long-press and drag to select, or use *Select all*, and everything is copied, including lines far outside the visible area. A selection too large for the clipboard is saved to Downloads instead.
+- A terminal-style output engine built for floods such as `dumpsys`: output is parsed off the main thread and the screen refreshes at most about 30 times per second.
+- Lines are rebuilt from the raw stream, so chunk boundaries never split a line, and `\r` progress bars overwrite their own line.
+- The last 20,000 lines stay in memory. An *unlimited lines* option keeps every line, spooled to a file on disk.
+- View options shared by every command-output screen: line numbers and text size.
 
 ### Wake lock modes
 
@@ -74,7 +75,7 @@ Restart the server after changing the file.
 
 ## 🔧 Build & Install
 
-AxM-Next no longer relies on git history for versioning: the version is fixed at **1.0** (`versionCode` comes from the shared `api` manifest).
+AxM-Next no longer relies on git history for versioning: the version is fixed at **1.1** (`versionCode` comes from the shared `api` manifest).
 
 ### Requirements
 - JDK 21
@@ -105,7 +106,7 @@ Then build:
 ./gradlew :manager:assembleRelease
 ```
 
-The APK is written to `manager/build/outputs/apk/release/` as `AxM-Next_v1.0_<versionCode>-release_<timestamp>.apk`. Use `:manager:assembleDebug` for a debug build.
+The APK is written to `manager/build/outputs/apk/release/` as `AxM-Next_v1.1_<versionCode>-release_<timestamp>.apk`. Use `:manager:assembleDebug` for a debug build.
 
 > Release builds strip `android.util.Log` calls through R8 rules. Use a debug build when you need to read the app or server logs.
 
@@ -144,7 +145,7 @@ If the signing secrets are missing or invalid, the workflow generates a temporar
 ### Publish a release
 
 ```bash
-gh workflow run build.yml -f build_type=Release -f publish=true -f tag=v1.0
+gh workflow run build.yml -f build_type=Release -f publish=true -f tag=v1.1
 ```
 
 Publishing requires valid signing secrets (the workflow refuses to publish an APK signed with a random key). It attaches the APK and its SHA-256 checksum to a GitHub release.

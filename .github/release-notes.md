@@ -1,12 +1,14 @@
-## AxM-Next
+## AxM-Next v1.1
 
 A modified fork of [AxManager](https://github.com/fahrez182/AxManager) by fahrez182.
 
-### Highlights
-- Status card banner (16:9) with JPG, PNG, WebP, or GIF support
-- Customizable plugin WebUI shortcuts (name and adaptive icon)
-- Permission manager filter for Shizuku API apps, with granted apps on top
-- Lighter app icon loading and lower background memory use
+### What's new
+- New terminal-style output for Quick Shell: handles floods like `dumpsys`, keeps the last 20,000 lines (or every line with the unlimited option), with line numbers and text size options
+- Status banner at 2:1 with a draggable crop, a dark fade toward the bottom for custom banners, and it stays visible while switching tabs
+- Plugin WebUI shortcuts: long-press a plugin card for a centered dialog with a custom name and an icon that adapts to your launcher's shape
+- Permission manager can filter to Shizuku API apps, with granted apps on top
+- Search across all settings in the settings editor
+- The plugin installer and igniter use the phone's own tools first and fall back to BusyBox only when a tool is missing
 - Server auto-recovery and a configurable wake lock policy (default: no wake lock)
 
 ### Install
