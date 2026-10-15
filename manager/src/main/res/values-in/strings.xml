@@ -255,6 +255,10 @@
     <string name="home_banner_adjust_hint">Geser gambar untuk memilih bagian yang tampil di banner</string>
     <string name="settings_editor_search_all">Cari di semua pengaturan</string>
     <string name="settings_editor_no_results">Tidak ada pengaturan yang cocok</string>
+    <string name="settings_editor_all">Semua</string>
+    <string name="settings_editor_overview">Ikhtisar</string>
+    <string name="settings_editor_overview_desc">Jumlah entri per sumber. Ketuk salah satu untuk membukanya.</string>
+    <string name="settings_editor_entries">%1$d entri</string>
     <string name="terminal_select_text">Pilih teks</string>
     <string name="terminal_select_text_hint">Tekan lama untuk memilih. Pilih semua menyalin seluruh output.</string>
     <string name="terminal_select_text_truncated">Menampilkan %1$d baris terakhir</string>

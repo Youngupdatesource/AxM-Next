@@ -9,6 +9,7 @@ import android.service.quicksettings.TileService
 import android.text.Html
 import android.text.method.LinkMovementMethod
 import android.util.Log
+import android.util.TypedValue
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -56,6 +57,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -544,6 +546,11 @@ fun RootCard(
 
             Spacer(modifier = Modifier.size(20.dp))
 
+            // A plain TextView takes its colours from the XML theme, which is not the Compose
+            // light/dark scheme: set text and link colours from MaterialTheme (same as the
+            // wireless debugging card above: bodyMedium + onSurfaceVariant).
+            val messageColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+            val linkColor = MaterialTheme.colorScheme.primary.toArgb()
             @Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
             AndroidView(
                 factory = { context ->
@@ -556,7 +563,12 @@ fun RootCard(
                             Html.FROM_HTML_MODE_LEGACY
                         )
                         movementMethod = LinkMovementMethod.getInstance()
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     }
+                },
+                update = {
+                    it.setTextColor(messageColor)
+                    it.setLinkTextColor(linkColor)
                 }
             )
             Spacer(modifier = Modifier.size(20.dp))

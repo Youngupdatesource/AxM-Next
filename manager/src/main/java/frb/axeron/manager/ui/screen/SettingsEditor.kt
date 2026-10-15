@@ -13,10 +13,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,11 +35,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TextSnippet
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -95,8 +103,10 @@ import frb.axeron.manager.ui.theme.insetTextFieldColors
 import frb.axeron.manager.ui.component.rememberConfirmDialog
 import frb.axeron.manager.ui.util.ClipboardUtil
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -115,8 +125,9 @@ fun SettingsEditorScreen(
         SettingsRepository.SettingType.entries.toList()
     }
 
+    // null = the "All" page (overview + every entry); page N+1 is settingTypes[N].
     var selectedType by remember {
-        mutableStateOf(SettingsRepository.SettingType.GLOBAL)
+        mutableStateOf<SettingsRepository.SettingType?>(null)
     }
 
     var query by remember { mutableStateOf("") }
@@ -129,8 +140,8 @@ fun SettingsEditorScreen(
     /* ================= PAGER ================= */
 
     val pagerState = rememberPagerState(
-        initialPage = settingTypes.indexOf(selectedType),
-        pageCount = { settingTypes.size }
+        initialPage = 0,
+        pageCount = { settingTypes.size + 1 }
     )
 
     /* ================= STATE CACHES ================= */
@@ -153,34 +164,53 @@ fun SettingsEditorScreen(
         snapshotFlow { pagerState.currentPage }
             .distinctUntilChanged()
             .collect { page ->
-                selectedType = settingTypes[page]
+                selectedType = settingTypes.getOrNull(page - 1)
                 showFab = true
             }
     }
 
     /* ================= REFRESH EVENT ================= */
 
-    fun refresh(type: SettingsRepository.SettingType) {
-        scope.launch {
-            loadingStates[type] = true
-            dataCache[type] = settingsRepository.getAll(type)
+    // The repository spawns processes and reads thousands of lines: never on the main thread.
+    suspend fun load(type: SettingsRepository.SettingType) {
+        loadingStates[type] = true
+        try {
+            dataCache[type] = withContext(Dispatchers.IO) { settingsRepository.getAll(type) }
+        } finally {
             loadingStates[type] = false
         }
+    }
+
+    fun refresh(type: SettingsRepository.SettingType) {
+        scope.launch { load(type) }
+    }
+
+    fun refreshAll() {
+        settingTypes.forEach { refresh(it) }
     }
 
     /* ================= GLOBAL SEARCH ================= */
 
     val isSearching = query.isNotBlank()
 
-    LaunchedEffect(isSearching) {
-        if (!isSearching) return@LaunchedEffect
+    // Search and the "All" page both need every source loaded.
+    val needsAll = isSearching || selectedType == null
+    LaunchedEffect(needsAll) {
+        if (!needsAll) return@LaunchedEffect
         settingTypes.forEach { type ->
             if (!dataCache.containsKey(type) && loadingStates[type] != true) {
-                launch {
-                    loadingStates[type] = true
-                    dataCache[type] = settingsRepository.getAll(type)
-                    loadingStates[type] = false
-                }
+                launch { load(type) }
+            }
+        }
+    }
+
+    val counts = settingTypes.associateWith { dataCache[it]?.size }
+    val allHits by remember {
+        derivedStateOf {
+            settingTypes.flatMap { type ->
+                dataCache[type].orEmpty().entries
+                    .sortedBy { it.key }
+                    .map { SearchHit(type, it.key, it.value ?: "") }
             }
         }
     }
@@ -224,7 +254,7 @@ fun SettingsEditorScreen(
                 onSearchTextChange = { query = it },
                 onClearClick = { query = "" },
                 action = {
-                    IconButton(onClick = { refresh(selectedType) }) {
+                    IconButton(onClick = { selectedType?.let { refresh(it) } ?: refreshAll() }) {
                         Icon(Icons.Outlined.Refresh, null)
                     }
                 }
@@ -232,19 +262,21 @@ fun SettingsEditorScreen(
         },
         floatingActionButton = {
             var isAdding by remember { mutableStateOf(false) }
+            // Adding needs a concrete source, so the FAB is hidden on the "All" page.
+            val addType = selectedType ?: SettingsRepository.SettingType.GLOBAL
 
             TableEditor(
                 addTable = true,
                 context = context,
                 showDialog = isAdding,
-                selectedType = selectedType,
+                selectedType = addType,
                 settingsRepository = settingsRepository,
                 onDismissRequest = { isAdding = false },
-                onRefresh = { refresh(selectedType) }
+                onRefresh = { refresh(addType) }
             )
 
             AnimatedVisibility(
-                visible = showFab && !isSearching,
+                visible = showFab && !isSearching && selectedType != null,
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it }
             ) {
@@ -280,12 +312,11 @@ fun SettingsEditorScreen(
                 )
             } else {
             RoundedTabRow(
-                selectedType = selectedType,
-                onSelect = {
+                selectedIndex = selectedType?.let { settingTypes.indexOf(it) + 1 } ?: 0,
+                counts = counts,
+                onSelect = { target ->
                     scope.launch {
-                        if (selectedType == it) return@launch
-                        val target = settingTypes.indexOf(it)
-                        if (pagerState.currentPage != target && target >= 0) {
+                        if (pagerState.currentPage != target) {
                             pagerState.animateScrollToPage(target)
                         }
                         showFab = true
@@ -296,18 +327,34 @@ fun SettingsEditorScreen(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                key = { page -> settingTypes[page].name }
+                key = { page -> settingTypes.getOrNull(page - 1)?.name ?: "all" }
             ) { page ->
 
-                val type = settingTypes[page]
+                val type = settingTypes.getOrNull(page - 1)
+
+                if (type == null) {
+                    AllPage(
+                        counts = counts,
+                        hits = allHits,
+                        loading = settingTypes.any { loadingStates[it] == true },
+                        context = context,
+                        settingsRepository = settingsRepository,
+                        onOpen = { opened ->
+                            scope.launch {
+                                pagerState.animateScrollToPage(settingTypes.indexOf(opened) + 1)
+                            }
+                        },
+                        onRefreshAll = { refreshAll() },
+                        onRefresh = { refresh(it) }
+                    )
+                    return@HorizontalPager
+                }
 
                 /* ========== INITIAL LOAD (ONCE PER PAGE) ========== */
 
                 LaunchedEffect(type) {
-                    if (!dataCache.containsKey(type)) {
-                        loadingStates[type] = true
-                        dataCache[type] = settingsRepository.getAll(type)
-                        loadingStates[type] = false
+                    if (!dataCache.containsKey(type) && loadingStates[type] != true) {
+                        load(type)
                         Log.d("SettingsEditor", "loaded $type")
                     }
                 }
@@ -443,12 +490,15 @@ private fun SearchResults(
 }
 
 
+/** Tab 0 is "All"; tab N+1 is the Nth [SettingsRepository.SettingType]. */
 @Composable
 fun RoundedTabRow(
-    selectedType: SettingsRepository.SettingType,
-    onSelect: (SettingsRepository.SettingType) -> Unit
+    selectedIndex: Int,
+    counts: Map<SettingsRepository.SettingType, Int?>,
+    onSelect: (Int) -> Unit
 ) {
-    val selectedIndex = SettingsRepository.SettingType.entries.indexOf(selectedType)
+    val types = SettingsRepository.SettingType.entries
+    val total = if (types.all { counts[it] != null }) types.sumOf { counts[it] ?: 0 } else null
 
     SecondaryScrollableTabRow(
         selectedTabIndex = selectedIndex,
@@ -461,7 +511,9 @@ fun RoundedTabRow(
         edgePadding = 4.dp,
         divider = {}
     ) {
-        SettingsRepository.SettingType.entries.forEachIndexed { index, type ->
+        (0..types.size).forEach { index ->
+            val type = types.getOrNull(index - 1)
+            val count = if (type == null) total else counts[type]
             val isSelected = index == selectedIndex
             val textColor by animateColorAsState(
                 if (isSelected)
@@ -472,7 +524,7 @@ fun RoundedTabRow(
 
             Tab(
                 selected = isSelected,
-                onClick = { onSelect(type) },
+                onClick = { onSelect(index) },
                 modifier = Modifier
                     .padding(horizontal = 3.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(50))
@@ -482,12 +534,168 @@ fun RoundedTabRow(
                     )
                     .padding(horizontal = 12.dp),
                 text = {
-                    Text(
-                        text = stringResource(type.stringId),
-                        color = textColor,
-                        style = MaterialTheme.typography.labelLarge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(type?.stringId ?: R.string.settings_editor_all),
+                            color = textColor,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        if (count != null) {
+                            Text(
+                                text = count.toString(),
+                                color = textColor.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+private fun SettingsRepository.SettingType.icon(): ImageVector = when (this) {
+    SettingsRepository.SettingType.GLOBAL -> Icons.Outlined.Public
+    SettingsRepository.SettingType.SECURE -> Icons.Outlined.Shield
+    SettingsRepository.SettingType.SYSTEM -> Icons.Outlined.Settings
+    SettingsRepository.SettingType.ANDROID_PROP -> Icons.Outlined.Android
+    SettingsRepository.SettingType.AXERON_ENV -> Icons.Outlined.Terminal
+}
+
+/** "All" page: per-source overview on top, then every entry tagged with its source. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AllPage(
+    counts: Map<SettingsRepository.SettingType, Int?>,
+    hits: List<SearchHit>,
+    loading: Boolean,
+    context: Context,
+    settingsRepository: SettingsRepository,
+    onOpen: (SettingsRepository.SettingType) -> Unit,
+    onRefreshAll: () -> Unit,
+    onRefresh: (SettingsRepository.SettingType) -> Unit
+) {
+    PullToRefreshBox(
+        isRefreshing = loading,
+        onRefresh = onRefreshAll
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
+        ) {
+            item(key = "overview") {
+                OverviewSection(counts = counts, onOpen = onOpen)
+            }
+            items(
+                items = hits,
+                key = { "${it.type.name}/${it.key}" }
+            ) { hit ->
+                TableItem(
+                    context = context,
+                    key = hit.key,
+                    value = hit.value,
+                    selectedType = hit.type,
+                    settingsRepository = settingsRepository,
+                    location = stringResource(hit.type.stringId)
+                ) {
+                    onRefresh(hit.type)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewSection(
+    counts: Map<SettingsRepository.SettingType, Int?>,
+    onOpen: (SettingsRepository.SettingType) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.settings_editor_overview),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = stringResource(R.string.settings_editor_overview_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        SettingsRepository.SettingType.entries.chunked(2).forEach { pair ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                pair.forEach { type ->
+                    OverviewCard(
+                        type = type,
+                        count = counts[type],
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        onClick = { onOpen(type) }
                     )
                 }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OverviewCard(
+    type: SettingsRepository.SettingType,
+    count: Int?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    ElevatedCard(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor())
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = type.icon(),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(type.stringId),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = count?.let { stringResource(R.string.settings_editor_entries, it) } ?: "…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

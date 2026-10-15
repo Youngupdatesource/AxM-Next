@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.DoNotTouch
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Output
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,9 +74,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -86,6 +92,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
@@ -162,6 +169,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
     val snackBarHost = LocalSnackbarHost.current
 
     var showExtraDialog by remember { mutableStateOf(false) }
+    var showTextViewer by remember { mutableStateOf(false) }
 
     ExtraSettings(
         showExtraDialog,
@@ -201,6 +209,15 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         enabled = hasLogs
                     ) {
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
+                    }
+                    IconButton(
+                        onClick = { showTextViewer = true },
+                        enabled = hasLogs
+                    ) {
+                        Icon(
+                            Icons.Outlined.SelectAll,
+                            contentDescription = stringResource(R.string.terminal_select_text)
+                        )
                     }
                     IconButton(
                         onClick = {
@@ -303,6 +320,8 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     bottom = 22.dp
                 ),
                 jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
+                textViewerOpen = showTextViewer,
+                onTextViewerDismiss = { showTextViewer = false },
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -410,6 +429,24 @@ fun KeyboardVisibilityListener(
 }
 
 
+/**
+ * Sits between the bottom sheet and its scrolling content. When the list is already at its end,
+ * the rest of an upward drag or fling is swallowed here instead of being handed to the sheet,
+ * whose settle animation otherwise kicks in and makes the content bounce back and forth when it
+ * is only slightly taller than the sheet. Downward leftovers still reach the sheet, so
+ * swipe-to-dismiss keeps working from the top of the list.
+ */
+private val SwallowUpwardLeftover = object : NestedScrollConnection {
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource
+    ): Offset = if (available.y < 0f) Offset(0f, available.y) else Offset.Zero
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        if (available.y < 0f) Velocity(0f, available.y) else Velocity.Zero
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExtraSettings(
@@ -428,14 +465,19 @@ fun ExtraSettings(
             val keyEventOption = QuickShellViewModel.KeyEventType.entries
 
             // SettingsItem carries its own 16dp gutter.
-            LazyColumn(
+            // A handful of fixed rows: a plain scrolling Column instead of a LazyColumn, so the
+            // content height is deterministic. SwallowUpwardLeftover keeps the leftover of an
+            // upward drag/fling at the end of the list from reaching the sheet (see below).
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .nestedScroll(SwallowUpwardLeftover)
+                    .verticalScroll(rememberScrollState())
                     .padding(bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
+                run {
                     val checkedOutputStates = remember {
                         mutableStateMapOf<QuickShellViewModel.OutputType, Boolean>().apply {
                             outputOption.forEach {
@@ -475,7 +517,7 @@ fun ExtraSettings(
                     }
                 }
 
-                item {
+                run {
                     val checkedSaveStates = remember {
                         mutableStateMapOf<QuickShellViewModel.OutputType, Boolean>().apply {
                             outputOption.forEach {
@@ -515,7 +557,7 @@ fun ExtraSettings(
                     }
                 }
 
-                item {
+                run {
                     val blockedKeyEventStates = remember {
                         mutableStateMapOf<QuickShellViewModel.KeyEventType, Boolean>().apply {
                             keyEventOption.forEach {
@@ -555,11 +597,11 @@ fun ExtraSettings(
                     }
                 }
 
-                item {
+                run {
                     TerminalOptionsCard()
                 }
 
-                item {
+                run {
                     SettingsItem(
                         iconVector = Icons.Filled.Security,
                         label = stringResource(R.string.shell_restriction),
@@ -569,7 +611,7 @@ fun ExtraSettings(
                     )
                 }
 
-                item {
+                run {
                     SettingsItem(
                         iconVector = Icons.Outlined.Bolt,
                         label = stringResource(R.string.compat_mode),

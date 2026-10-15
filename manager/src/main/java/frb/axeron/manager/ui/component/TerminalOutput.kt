@@ -48,6 +48,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -144,6 +146,8 @@ fun terminalTextStyle(scale: Float = TerminalPrefs.textScale): TextStyle = TextS
  * numbers stay put.
  * @param filter hides lines by kind (e.g. stderr outside developer mode). Remember it.
  * @param color per-kind base colour; ANSI colours in the text still win.
+ * @param textViewerOpen shows the full-screen text viewer (every line, "select all" works).
+ * Long-press on the output itself selects text in place; the viewer is only opened explicitly.
  */
 @Composable
 fun <K : Any> TerminalOutput(
@@ -155,6 +159,8 @@ fun <K : Any> TerminalOutput(
     color: @Composable (K) -> Color = { MaterialTheme.colorScheme.onSurfaceVariant },
     jumpButtonPadding: PaddingValues = PaddingValues(0.dp),
     state: LazyListState = rememberLazyListState(),
+    textViewerOpen: Boolean = false,
+    onTextViewerDismiss: () -> Unit = {},
 ) {
     val showLineNumbers = TerminalPrefs.lineNumbers
     val style = terminalTextStyle()
@@ -232,10 +238,9 @@ fun <K : Any> TerminalOutput(
     var pillActive by remember { mutableStateOf(false) }
     var pillTick by remember { mutableIntStateOf(0) }
     var thumbDragging by remember { mutableStateOf(false) }
-    // Long-press opens a native, selectable copy of the output. Compose's SelectionContainer
-    // crashes on a LazyColumn (recycled items) and can only select what is on screen.
-    var viewer by remember { mutableStateOf<TextViewerRequest?>(null) }
-    val haptics = LocalHapticFeedback.current
+    // Long-press selects text right in the output (SelectionContainer around the list). Lines
+    // that were never composed can't be part of such a selection, so the full-text viewer stays
+    // available through [textViewerOpen] for "copy everything".
     val scope = rememberCoroutineScope()
 
     val canScroll by remember {
@@ -245,6 +250,7 @@ fun <K : Any> TerminalOutput(
 
     Box(modifier) {
         Box(Modifier.fillMaxSize()) {
+            SelectionContainer(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = state,
                 contentPadding = contentPadding,
@@ -275,23 +281,17 @@ fun <K : Any> TerminalOutput(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (mark != null) Modifier.background(rowHighlight) else Modifier)
-                            .combinedClickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onLongClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewer = TextViewerRequest(view, position)
-                                },
-                                onClick = {}
-                            )
                     ) {
                         if (showLineNumbers) {
+                            // Line numbers are not part of the output: keep them out of a selection.
+                            DisableSelection {
                             BasicText(
                                 text = line.number.toString(),
                                 style = gutterStyle,
                                 maxLines = 1,
                                 modifier = Modifier.width(gutterWidth)
                             )
+                            }
                             Spacer(Modifier.width(10.dp))
                         }
                         BasicText(
@@ -304,6 +304,7 @@ fun <K : Any> TerminalOutput(
                         )
                     }
                 }
+            }
             }
         }
 
@@ -385,12 +386,19 @@ fun <K : Any> TerminalOutput(
         }
     }
 
-    viewer?.let { request ->
+    // One request per opening: TextSelectDialog reloads whenever the request instance changes.
+    val viewerRequest = remember(textViewerOpen) {
+        val v = view
+        if (textViewerOpen && v.count > 0) {
+            TextViewerRequest(v, v.positionAt(state.firstVisibleItemIndex.coerceIn(0, v.count - 1)))
+        } else null
+    }
+    viewerRequest?.let { request ->
         TextSelectDialog(
             buffer = buffer,
             request = request,
             fontSizeSp = style.fontSize.value,
-            onDismiss = { viewer = null }
+            onDismiss = onTextViewerDismiss
         )
     }
 

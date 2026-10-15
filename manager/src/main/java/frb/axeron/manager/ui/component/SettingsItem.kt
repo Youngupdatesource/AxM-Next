@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import frb.axeron.manager.ui.theme.cardContainerColor
 
@@ -300,8 +302,11 @@ fun CheckBoxText(
             onCheckedChange(!checked)
         }
     ) {
+        // The Card content is a top-aligned Column: the Row must fill the fixed 36dp height,
+        // otherwise the checkbox and label stick to the top edge.
         Row(
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxSize()
         ) {
             RoundedCheckbox(
                 checked = checked,
@@ -311,8 +316,13 @@ fun CheckBoxText(
             Spacer(Modifier.width(12.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                lineHeight = MaterialTheme.typography.bodyMedium.fontSize
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    lineHeight = MaterialTheme.typography.bodyMedium.fontSize,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both
+                    )
+                )
             )
         }
     }
