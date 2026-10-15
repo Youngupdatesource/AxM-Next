@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -266,7 +267,7 @@ fun SettingsEditorScreen(
                     LinearProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     )
                 }
                 SearchResults(
@@ -417,7 +418,10 @@ private fun SearchResults(
         return
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
+    ) {
         items(
             items = hits,
             key = { "${it.type.name}/${it.key}" }
