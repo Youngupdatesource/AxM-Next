@@ -263,6 +263,7 @@ fun SettingsEditorScreen(
             val scope = rememberCoroutineScope()
 
             if (isSearching) {
+                Spacer(Modifier.height(12.dp))
                 if (searchLoading) {
                     LinearProgressIndicator(
                         modifier = Modifier
@@ -421,7 +422,7 @@ private fun SearchResults(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp)
+        contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
     ) {
         items(
             items = hits,
