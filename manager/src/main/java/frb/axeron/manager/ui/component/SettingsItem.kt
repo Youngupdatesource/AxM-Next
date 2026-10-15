@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -296,7 +295,7 @@ fun CheckBoxText(
             .height(36.dp)
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 2.dp),
-        shape = RoundedCornerShape(5.dp),
+        shape = RoundedCornerShape(12.dp),
         onClick = {
             onCheckedChange(!checked)
         }
@@ -304,12 +303,10 @@ fun CheckBoxText(
         Row(
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                modifier = Modifier.size(32.dp),
+            RoundedCheckbox(
                 checked = checked,
-                onCheckedChange = { newValue ->
-                    onCheckedChange(newValue)
-                }
+                size = 20.dp,
+                modifier = Modifier.padding(start = 10.dp)
             )
             Spacer(Modifier.width(12.dp))
             Text(

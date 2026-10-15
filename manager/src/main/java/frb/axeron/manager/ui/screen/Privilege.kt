@@ -30,7 +30,9 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import frb.axeron.manager.R
+import frb.axeron.manager.ui.component.RoundedCheckbox
 import frb.axeron.manager.ui.component.SearchAppBar
+import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.component.UseLifecycle
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
 import androidx.compose.foundation.layout.Box
@@ -38,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -89,7 +90,10 @@ fun PrivilegeScreen(
                         }
                         DropdownMenu(
                             expanded = menuOpen,
-                            onDismissRequest = { menuOpen = false }
+                            onDismissRequest = { menuOpen = false },
+                            shape = RoundedCornerShape(24.dp),
+                            containerColor = cardContainerColor(),
+                            tonalElevation = 0.dp
                         ) {
                             DropdownMenuItem(
                                 // clip sebelum clickable -> highlight saat ditekan/ditahan ikut
@@ -99,10 +103,7 @@ fun PrivilegeScreen(
                                     .clip(RoundedCornerShape(16.dp)),
                                 text = { Text(stringResource(R.string.privilege_filter_shizuku)) },
                                 leadingIcon = {
-                                    Checkbox(
-                                        checked = privilegeViewModel.shizukuOnly,
-                                        onCheckedChange = null
-                                    )
+                                    RoundedCheckbox(checked = privilegeViewModel.shizukuOnly)
                                 },
                                 onClick = {
                                     privilegeViewModel.updateShizukuOnly(!privilegeViewModel.shizukuOnly)

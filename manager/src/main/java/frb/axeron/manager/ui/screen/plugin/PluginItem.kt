@@ -153,8 +153,8 @@ fun PluginConfig(
                 .padding(horizontal = 24.dp)
                 .fillMaxWidth(),
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp
+            color = cardContainerColor(),
+            tonalElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
