@@ -242,13 +242,13 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    PluginCard(
-                        Modifier.weight(1f),
-                        pluginViewModel
-                    )
                     PrivilegeCard(
                         Modifier.weight(1f),
                         privilegeViewModel
+                    )
+                    PluginCard(
+                        Modifier.weight(1f),
+                        pluginViewModel
                     )
                 }
             }
