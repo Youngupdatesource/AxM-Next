@@ -1,5 +1,12 @@
 package frb.axeron.manager.ui.component
 
+import android.graphics.Typeface
+import android.util.TypedValue
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,11 +18,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -37,12 +47,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.selection.DisableSelection
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +70,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -71,10 +83,14 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -89,15 +105,22 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
+import frb.axeron.api.utils.AnsiFilter
 import frb.axeron.manager.R
+import frb.axeron.manager.ui.util.ClipboardUtil
 import frb.axeron.manager.ui.util.TerminalBuffer
 import frb.axeron.manager.ui.util.TerminalPrefs
 import androidx.compose.ui.graphics.TransformOrigin
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlinx.coroutines.withContext
 
 /** Default text style for command output, scaled by [TerminalPrefs.textScale]. */
 @Composable
@@ -208,6 +231,10 @@ fun <K : Any> TerminalOutput(
     var pillActive by remember { mutableStateOf(false) }
     var pillTick by remember { mutableIntStateOf(0) }
     var thumbDragging by remember { mutableStateOf(false) }
+    // Long-press opens a native, selectable copy of the output. Compose's SelectionContainer
+    // crashes on a LazyColumn (recycled items) and can only select what is on screen.
+    var viewer by remember { mutableStateOf<TextViewerRequest?>(null) }
+    val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
 
     val canScroll by remember {
@@ -216,7 +243,7 @@ fun <K : Any> TerminalOutput(
     val showScrollbar = canScroll && view.count > SCROLLBAR_MIN_LINES
 
     Box(modifier) {
-        SelectionContainer(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize()) {
             LazyColumn(
                 state = state,
                 contentPadding = contentPadding,
@@ -247,16 +274,23 @@ fun <K : Any> TerminalOutput(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (mark != null) Modifier.background(rowHighlight) else Modifier)
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onLongClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    viewer = TextViewerRequest(view, position)
+                                },
+                                onClick = {}
+                            )
                     ) {
                         if (showLineNumbers) {
-                            DisableSelection {
-                                BasicText(
-                                    text = line.number.toString(),
-                                    style = gutterStyle,
-                                    maxLines = 1,
-                                    modifier = Modifier.width(gutterWidth)
-                                )
-                            }
+                            BasicText(
+                                text = line.number.toString(),
+                                style = gutterStyle,
+                                maxLines = 1,
+                                modifier = Modifier.width(gutterWidth)
+                            )
                             Spacer(Modifier.width(10.dp))
                         }
                         BasicText(
@@ -350,6 +384,15 @@ fun <K : Any> TerminalOutput(
         }
     }
 
+    viewer?.let { request ->
+        TextSelectDialog(
+            buffer = buffer,
+            request = request,
+            fontSizeSp = style.fontSize.value,
+            onDismiss = { viewer = null }
+        )
+    }
+
     if (showGoTo && view.count > 0) {
         val v = view
         GoToLineDialog(
@@ -377,6 +420,9 @@ fun <K : Any> TerminalOutput(
 
 private const val SCROLLBAR_MIN_LINES = 200
 private const val PILL_IDLE_MS = 1800L
+
+/** Lines handed to the native text view; keeps a runaway buffer from exhausting memory. */
+private const val VIEWER_MAX_LINES = 30_000
 
 /** Which buffer positions are on screen, in order. */
 @Immutable
@@ -510,6 +556,135 @@ private fun FastScrollbar(
                 .clip(CircleShape)
                 .background(thumbColor.copy(alpha = alpha))
         )
+    }
+}
+
+private class TextViewerRequest(val view: LineView, val target: Long)
+
+private class ViewerText(val text: String, val targetOffset: Int, val truncated: Boolean)
+
+/**
+ * Full-screen, natively selectable copy of the output. A single [TextView] owns the whole text,
+ * so the system toolbar's "Select all" / "Copy" cover every line, not just the rendered ones.
+ */
+@Composable
+private fun <K : Any> TextSelectDialog(
+    buffer: TerminalBuffer<K>,
+    request: TextViewerRequest,
+    fontSizeSp: Float,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val loaded by produceState<ViewerText?>(null, buffer, request) {
+        value = withContext(Dispatchers.Default) {
+            val view = request.view
+            val first = (view.count - VIEWER_MAX_LINES).coerceAtLeast(0)
+            val targetIndex = view.indexOf(request.target).coerceAtLeast(first)
+            val sb = StringBuilder()
+            var targetOffset = 0
+            for (i in first until view.count) {
+                if (i == targetIndex) targetOffset = sb.length
+                val line = buffer.lineAt(view.positionAt(i)) ?: continue
+                sb.append(AnsiFilter.stripAnsi(line.text)).append('\n')
+            }
+            ViewerText(sb.toString(), targetOffset, first > 0)
+        }
+    }
+    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(Modifier.systemBarsPadding()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.terminal_select_text),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = if (loaded?.truncated == true)
+                                stringResource(R.string.terminal_select_text_truncated, VIEWER_MAX_LINES)
+                            else stringResource(R.string.terminal_select_text_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        enabled = loaded != null,
+                        onClick = {
+                            val ok = loaded?.let { ClipboardUtil.put(context, it.text) } == true
+                            Toast.makeText(
+                                context,
+                                if (ok) R.string.copied else R.string.failed,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    ) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.copy))
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
+                    }
+                }
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
+                    val data = loaded
+                    if (data == null) {
+                        CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    } else {
+                        AndroidView(
+                            modifier = Modifier.fillMaxSize(),
+                            factory = { ctx ->
+                                val pad = (12 * ctx.resources.displayMetrics.density).toInt()
+                                val tv = TextView(ctx).apply {
+                                    typeface = Typeface.MONOSPACE
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, fontSizeSp)
+                                    setTextColor(textColor)
+                                    setPadding(pad, pad, pad, pad)
+                                    setTextIsSelectable(true)
+                                    text = data.text
+                                }
+                                tv.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+                                    override fun onLayoutChange(
+                                        v: View, left: Int, top: Int, right: Int, bottom: Int,
+                                        oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
+                                    ) {
+                                        val layout = tv.layout ?: return
+                                        tv.removeOnLayoutChangeListener(this)
+                                        val offset = data.targetOffset.coerceIn(0, tv.text.length)
+                                        (tv.parent as? View)?.scrollTo(
+                                            0, layout.getLineTop(layout.getLineForOffset(offset))
+                                        )
+                                    }
+                                })
+                                ScrollView(ctx).apply {
+                                    isVerticalScrollBarEnabled = true
+                                    addView(
+                                        tv,
+                                        ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.WRAP_CONTENT
+                                        )
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

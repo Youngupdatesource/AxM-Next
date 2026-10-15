@@ -234,4 +234,7 @@
     <string name="home_banner_adjust_hint">拖动图片以选择横幅中显示的区域</string>
     <string name="settings_editor_search_all">搜索所有设置</string>
     <string name="settings_editor_no_results">没有匹配的设置</string>
+    <string name="terminal_select_text">选择文本</string>
+    <string name="terminal_select_text_hint">长按选择，全选将复制全部输出。</string>
+    <string name="terminal_select_text_truncated">显示最后 %1$d 行</string>
 </resources>
