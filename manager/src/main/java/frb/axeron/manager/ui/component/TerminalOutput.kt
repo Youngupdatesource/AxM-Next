@@ -7,12 +7,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,7 +93,9 @@ import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.util.TerminalBuffer
 import frb.axeron.manager.ui.util.TerminalPrefs
+import androidx.compose.ui.graphics.TransformOrigin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -200,6 +205,9 @@ fun <K : Any> TerminalOutput(
     val rowHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val columnHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
     var showGoTo by remember { mutableStateOf(false) }
+    var pillActive by remember { mutableStateOf(false) }
+    var pillTick by remember { mutableIntStateOf(0) }
+    var thumbDragging by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val canScroll by remember {
@@ -268,13 +276,36 @@ fun <K : Any> TerminalOutput(
             FastScrollbar(
                 state = state,
                 count = view.count,
-                onDragStart = { follow = false },
+                onDragStart = {
+                    follow = false
+                    thumbDragging = true
+                    pillTick++
+                },
+                onDragEnd = {
+                    thumbDragging = false
+                    pillTick++
+                },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(contentPadding.let {
                         PaddingValues(top = it.calculateTopPadding(), bottom = it.calculateBottomPadding())
                     })
             )
+        }
+
+        // The nav pill only shows while the user is scrolling, then slides away to uncover the output.
+        LaunchedEffect(state) {
+            state.interactionSource.interactions.collect {
+                if (it is DragInteraction.Start) pillTick++
+            }
+        }
+        LaunchedEffect(pillTick) {
+            if (pillTick == 0) return@LaunchedEffect
+            pillActive = true
+            delay(300)
+            snapshotFlow { state.isScrollInProgress }.first { !it }
+            delay(PILL_IDLE_MS)
+            pillActive = false
         }
 
         val currentLine by remember {
@@ -285,9 +316,11 @@ fun <K : Any> TerminalOutput(
             }
         }
         AnimatedVisibility(
-            visible = canScroll && view.count > 0,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            visible = canScroll && view.count > 0 && (pillActive || thumbDragging),
+            enter = fadeIn() + scaleIn(initialScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f)) +
+                    slideInHorizontally { it / 2 },
+            exit = fadeOut() + scaleOut(targetScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f)) +
+                    slideOutHorizontally { it },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(jumpButtonPadding)
@@ -300,11 +333,16 @@ fun <K : Any> TerminalOutput(
                 following = follow,
                 canScrollUp = state.canScrollBackward,
                 onTop = {
+                    pillTick++
                     follow = false
                     scope.launch { state.scrollToItem(0) }
                 },
-                onGoTo = { showGoTo = true },
+                onGoTo = {
+                    pillTick++
+                    showGoTo = true
+                },
                 onBottom = {
+                    pillTick++
                     follow = true
                     scope.launch { state.scrollToItem((view.count - 1).coerceAtLeast(0), Int.MAX_VALUE) }
                 }
@@ -338,6 +376,7 @@ fun <K : Any> TerminalOutput(
 }
 
 private const val SCROLLBAR_MIN_LINES = 200
+private const val PILL_IDLE_MS = 1800L
 
 /** Which buffer positions are on screen, in order. */
 @Immutable
@@ -405,6 +444,7 @@ private fun FastScrollbar(
     state: LazyListState,
     count: Int,
     onDragStart: () -> Unit,
+    onDragEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -446,8 +486,14 @@ private fun FastScrollbar(
                         onDragStart()
                         jump(it.y)
                     },
-                    onDragEnd = { dragging = false },
-                    onDragCancel = { dragging = false }
+                    onDragEnd = {
+                        dragging = false
+                        onDragEnd()
+                    },
+                    onDragCancel = {
+                        dragging = false
+                        onDragEnd()
+                    }
                 ) { change, _ ->
                     change.consume()
                     jump(change.position.y)

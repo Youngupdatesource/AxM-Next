@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -282,6 +283,12 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 else { type: QuickShellViewModel.OutputType -> type in visibleTypes }
             }
 
+            // Lift the nav pill above the Save Log button while that button is on screen.
+            val jumpButtonBottom by animateDpAsState(
+                targetValue = if (fabVisible && hasLogs) 68.dp else 12.dp,
+                label = "jumpButtonBottom"
+            )
+
             TerminalOutput(
                 buffer = viewModel.terminal,
                 state = listState,
@@ -295,7 +302,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     top = 70.dp,
                     bottom = 22.dp
                 ),
-                jumpButtonPadding = PaddingValues(bottom = 12.dp),
+                jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
                 modifier = Modifier.fillMaxSize()
             )
 
