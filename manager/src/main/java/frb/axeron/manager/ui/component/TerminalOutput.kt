@@ -4,6 +4,7 @@ import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -603,7 +604,10 @@ private fun <K : Any> TextSelectDialog(
             Column(Modifier.systemBarsPadding()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .padding(start = 20.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -639,6 +643,7 @@ private fun <K : Any> TextSelectDialog(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .clipToBounds()
                 ) {
                     val data = loaded
                     if (data == null) {
@@ -671,6 +676,10 @@ private fun <K : Any> TextSelectDialog(
                                 })
                                 ScrollView(ctx).apply {
                                     isVerticalScrollBarEnabled = true
+                                    clipChildren = true
+                                    clipToPadding = true
+                                    outlineProvider = ViewOutlineProvider.BOUNDS
+                                    clipToOutline = true
                                     addView(
                                         tv,
                                         ViewGroup.LayoutParams(
