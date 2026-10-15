@@ -367,7 +367,7 @@ fun SettingsEditorScreen(
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             state = listState,
-                            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp)
+                            contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
                         ) {
                             items(
                                 items = filtered.entries.toList(),
@@ -454,7 +454,7 @@ fun RoundedTabRow(
         selectedTabIndex = selectedIndex,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 20.dp)
             .clip(RoundedCornerShape(50)), // biar seluruh tabrow bulat
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         indicator = { null },
