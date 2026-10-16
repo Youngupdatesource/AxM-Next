@@ -3,6 +3,8 @@ package frb.axeron.manager.ui.screen
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import kotlinx.coroutines.Job
+import kotlin.math.abs
 import androidx.compose.material3.FilterChip
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -142,6 +144,9 @@ fun SettingsEditorScreen(
     var query by remember { mutableStateOf("") }
     var searchScope by remember { mutableStateOf(SearchScope.ALL) }
     var showFab by remember { mutableStateOf(true) }
+
+    // The one pending chip-driven page change; a newer tap always cancels it.
+    var navJob by remember { mutableStateOf<Job?>(null) }
 
     // Prefix filter per page, so every source remembers its own.
     val groupByPage = remember { mutableStateMapOf<Int, String>() }
@@ -341,9 +346,21 @@ fun SettingsEditorScreen(
                         // No pager on screen while searching: the chip just rescopes the search.
                         selectedType = target
                     } else {
-                        scope.launch {
-                            val page = pageOf(target)
-                            if (pagerState.currentPage != page) pagerState.animateScrollToPage(page)
+                        // Rapid taps: cancel the running animation first and always scroll to the
+                        // *latest* tap. (Comparing with currentPage skipped the scroll when the
+                        // previous animation had already passed halfway, so that older animation
+                        // finished and the wrong tab stayed on screen.) Far jumps snap instead of
+                        // composing every page in between.
+                        navJob?.cancel()
+                        val page = pageOf(target)
+                        selectedType = target
+                        navJob = scope.launch {
+                            if (abs(pagerState.currentPage - page) > 1) {
+                                pagerState.scrollToPage(page)
+                            } else {
+                                pagerState.animateScrollToPage(page)
+                            }
+                            selectedType = target
                             showFab = true
                         }
                     }

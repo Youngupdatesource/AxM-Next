@@ -217,26 +217,6 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
                     }
                     IconButton(
-                        onClick = { showSearch = !showSearch },
-                        enabled = hasLogs
-                    ) {
-                        Icon(
-                            Icons.Filled.Search,
-                            contentDescription = stringResource(R.string.terminal_search),
-                            tint = if (showSearch) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(
-                        onClick = { showTextViewer = true },
-                        enabled = hasLogs
-                    ) {
-                        Icon(
-                            Icons.Outlined.SelectAll,
-                            contentDescription = stringResource(R.string.terminal_select_text)
-                        )
-                    }
-                    IconButton(
                         onClick = {
                             showExtraDialog = true
                         }
@@ -344,6 +324,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 onTextViewerDismiss = { showTextViewer = false },
                 searchOpen = showSearch,
                 onSearchOpenChange = { showSearch = it },
+                onTextViewerOpen = { showTextViewer = true },
                 modifier = Modifier.fillMaxSize()
             )
 

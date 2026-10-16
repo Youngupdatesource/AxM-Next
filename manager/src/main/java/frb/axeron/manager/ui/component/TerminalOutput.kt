@@ -8,6 +8,8 @@ import android.view.ViewOutlineProvider
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -168,7 +170,8 @@ fun terminalTextStyle(scale: Float = TerminalPrefs.textScale): TextStyle = TextS
  * @param textViewerOpen shows the full-screen text viewer (every line, "select all" works).
  * Long-press on the output itself selects text in place; the viewer is only opened explicitly.
  * @param searchOpen shows the find bar (query, current/total, previous / next). Search is only
- * offered when [onSearchOpenChange] is set; the owner toggles it (top bar button, nav capsule).
+ * offered when [onSearchOpenChange] is set. The nav capsule also opens the text viewer when
+ * [onTextViewerOpen] is set, so the owner needs no top bar buttons for either.
  */
 @Composable
 fun <K : Any> TerminalOutput(
@@ -184,6 +187,7 @@ fun <K : Any> TerminalOutput(
     onTextViewerDismiss: () -> Unit = {},
     searchOpen: Boolean = false,
     onSearchOpenChange: ((Boolean) -> Unit)? = null,
+    onTextViewerOpen: (() -> Unit)? = null,
 ) {
     val showLineNumbers = TerminalPrefs.lineNumbers
     val style = terminalTextStyle()
@@ -473,7 +477,7 @@ fun <K : Any> TerminalOutput(
         }
 
         AnimatedVisibility(
-            visible = canScroll && view.count > 0,
+            visible = view.count > 0 && (canScroll || searchEnabled || onTextViewerOpen != null),
             enter = fadeIn() + scaleIn(initialScale = 0.7f, transformOrigin = TransformOrigin(1f, 1f)),
             exit = fadeOut() + scaleOut(targetScale = 0.7f, transformOrigin = TransformOrigin(1f, 1f)),
             modifier = Modifier
@@ -490,6 +494,12 @@ fun <K : Any> TerminalOutput(
                 expanded = pillExpanded,
                 emphasized = thumbDragging || (searchOpen && searchEnabled),
                 searchEnabled = searchEnabled,
+                onTextViewer = onTextViewerOpen?.let { open ->
+                    {
+                        pillTick++
+                        open()
+                    }
+                },
                 onExpand = { pillTick++ },
                 onSearch = {
                     pillTick++
@@ -938,6 +948,7 @@ private fun TerminalNavPill(
     expanded: Boolean,
     emphasized: Boolean,
     searchEnabled: Boolean,
+    onTextViewer: (() -> Unit)?,
     onExpand: () -> Unit,
     onSearch: () -> Unit,
     onTop: () -> Unit,
@@ -945,12 +956,12 @@ private fun TerminalNavPill(
     onBottom: () -> Unit,
 ) {
     val alpha by animateFloatAsState(
-        targetValue = if (expanded || emphasized) 1f else 0.5f,
+        targetValue = if (expanded || emphasized) 1f else 0.88f,
         animationSpec = tween(durationMillis = 320),
         label = "pillAlpha"
     )
     val elevation by animateDpAsState(
-        targetValue = if (expanded) 4.dp else 0.dp,
+        targetValue = if (expanded) 8.dp else 3.dp,
         animationSpec = tween(durationMillis = 280),
         label = "pillElevation"
     )
@@ -966,6 +977,7 @@ private fun TerminalNavPill(
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.secondaryContainer,
         shadowElevation = elevation,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
         modifier = Modifier.graphicsLayer { this.alpha = alpha }
     ) {
         Column(
@@ -979,6 +991,14 @@ private fun TerminalNavPill(
                             Icon(
                                 Icons.Filled.Search,
                                 contentDescription = stringResource(R.string.terminal_search)
+                            )
+                        }
+                    }
+                    if (onTextViewer != null) {
+                        IconButton(onClick = onTextViewer) {
+                            Icon(
+                                Icons.Outlined.SelectAll,
+                                contentDescription = stringResource(R.string.terminal_select_text)
                             )
                         }
                     }
@@ -1003,12 +1023,15 @@ private fun TerminalNavPill(
                     Text(
                         text = stringResource(R.string.terminal_line_short),
                         style = MaterialTheme.typography.labelSmall,
-                        color = content.copy(alpha = 0.7f)
+                        color = content.copy(alpha = 0.85f)
                     )
                 }
                 Text(
                     text = currentLine?.toString() ?: "–",
-                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold
+                    ),
                     color = content
                 )
             }

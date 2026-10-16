@@ -22,7 +22,35 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.delay
+import kotlin.math.abs
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -237,6 +265,27 @@ class AxActivity : ComponentActivity() {
             else -> true
         }
 
+        // --- floating nav capsule ---
+        // Icons never move or resize; only opacity/scale change, so a tap always lands where it
+        // looks like it will. Active: right after a tap / tab change. Idle (2.5 s) or while the
+        // content scrolls underneath: slightly smaller and dimmer.
+        val capsule = remember { CapsuleState() }
+        val capsuleScroll = remember(capsule) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source == NestedScrollSource.UserInput && abs(available.y) > 1f) capsule.fold()
+                    return Offset.Zero
+                }
+            }
+        }
+        LaunchedEffect(capsule.tick) {
+            delay(2500)
+            capsule.fold()
+        }
+        LaunchedEffect(currentDestination?.route) { capsule.poke() }
+        val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
         Box {
             Scaffold(
                 contentWindowInsets = WindowInsets()
@@ -247,7 +296,8 @@ class AxActivity : ComponentActivity() {
                     DestinationsNavHost(
                         modifier = Modifier
                             .padding(innerPadding)
-                            .padding(bottom = if (showBottomBar) 80.dp else 0.dp)
+                            .padding(bottom = if (showBottomBar) 68.dp + navInset else 0.dp)
+                            .nestedScroll(capsuleScroll)
                             // Geser kiri/kanan = pindah ke tab sebelah. Dipasang di parent, jadi
                             // komponen anak yang sudah memakai drag horizontal (slider, dll) tetap menang.
                             .pointerInput(showBottomBar, currentTabIndex, swipeTabs) {
@@ -286,7 +336,7 @@ class AxActivity : ComponentActivity() {
             }
 
             AnimatedVisibility(
-                visible = showBottomBar,
+                visible = showBottomBar && !imeVisible,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -295,7 +345,8 @@ class AxActivity : ComponentActivity() {
                     navController,
                     navigator,
                     activateViewModel.axeronInfo,
-                    pluginViewModel.pluginUpdateCount
+                    pluginViewModel.pluginUpdateCount,
+                    capsule
                 )
             }
         }
@@ -367,35 +418,67 @@ class AxActivity : ComponentActivity() {
     }
 
     @Composable
-    fun BottomBar(
+    private fun BottomBar(
         navController: NavHostController,
         navigator: DestinationsNavigator,
         axeronServerInfo: AxeronInfo,
-        moduleUpdateCount: Int
+        moduleUpdateCount: Int,
+        capsule: CapsuleState
     ) {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer
+        val active = capsule.active
+        val alpha by animateFloatAsState(
+            targetValue = if (active) 1f else 0.85f,
+            animationSpec = tween(durationMillis = 350),
+            label = "capsuleAlpha"
+        )
+        val scale by animateFloatAsState(
+            targetValue = if (active) 1f else 0.92f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
             ),
-            elevation = CardDefaults.cardElevation(0.dp),
-            shape = RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)
+            label = "capsuleScale"
+        )
+        val shadow by animateDpAsState(
+            targetValue = if (active) 10.dp else 4.dp,
+            animationSpec = tween(durationMillis = 300),
+            label = "capsuleShadow"
+        )
+
+        Box(
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(bottom = 8.dp)
         ) {
-            NavigationBar(
-                containerColor = Color.Transparent,
-                tonalElevation = 0.dp
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                shadowElevation = shadow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                modifier = Modifier.graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                }
             ) {
-                BottomBarDestination.entries
-                    .forEach { destination ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.padding(6.dp)
+                ) {
+                    BottomBarDestination.entries.forEach { destination ->
                         if (!axeronServerInfo.isRunning() && destination.needAxeron) return@forEach
 
-                        val isCurrentDestOnBackStack by navController.isRouteOnBackStackAsState(
-                            destination.direction
-                        )
-                        val label = stringResource(id = destination.labelId)
-                        NavigationBarItem(
-                            selected = isCurrentDestOnBackStack,
+                        val selected by navController.isRouteOnBackStackAsState(destination.direction)
+                        CapsuleItem(
+                            destination = destination,
+                            selected = selected,
+                            badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
                             onClick = {
-                                if (isCurrentDestOnBackStack) {
+                                capsule.poke()
+                                if (selected) {
                                     navigator.popBackStack(destination.direction, false)
                                 }
                                 navigator.navigate(destination.direction) {
@@ -405,39 +488,69 @@ class AxActivity : ComponentActivity() {
                                     launchSingleTop = true
                                     restoreState = true
                                 }
-                            },
-                            icon = {
-                                if (destination == BottomBarDestination.Plugin && moduleUpdateCount > 0) {
-                                    BadgedBox(badge = { Badge { Text(moduleUpdateCount.toString()) } }) {
-                                        if (isCurrentDestOnBackStack) {
-                                            Icon(
-                                                destination.iconSelected,
-                                                label
-                                            )
-                                        } else {
-                                            Icon(
-                                                destination.iconNotSelected,
-                                                label
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    if (isCurrentDestOnBackStack) Icon(
-                                        imageVector = destination.iconSelected,
-                                        contentDescription = label
-                                    ) else Icon(
-                                        imageVector = destination.iconNotSelected,
-                                        contentDescription = label
-                                    )
-                                }
-                            },
-                            label = {
-                                Text(label)
-                            },
-                            alwaysShowLabel = false
+                            }
                         )
                     }
+                }
             }
         }
+    }
+
+    /** Fixed-size slot: the selected one only changes colour, so nothing shifts under the finger. */
+    @Composable
+    private fun CapsuleItem(
+        destination: BottomBarDestination,
+        selected: Boolean,
+        badgeCount: Int,
+        onClick: () -> Unit
+    ) {
+        val label = stringResource(id = destination.labelId)
+        val container by animateColorAsState(
+            targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            animationSpec = tween(durationMillis = 250),
+            label = "capsuleItemBg"
+        )
+        val tint by animateColorAsState(
+            targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            animationSpec = tween(durationMillis = 250),
+            label = "capsuleItemTint"
+        )
+        val icon = if (selected) destination.iconSelected else destination.iconNotSelected
+
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(width = 60.dp, height = 48.dp)
+                .clip(CircleShape)
+                .background(container)
+                .clickable(onClick = onClick)
+        ) {
+            if (badgeCount > 0) {
+                BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) {
+                    Icon(icon, contentDescription = label, tint = tint)
+                }
+            } else {
+                Icon(icon, contentDescription = label, tint = tint)
+            }
+        }
+    }
+}
+
+/** Shared state of the floating nav capsule: [active] (full) vs idle (dimmer, a bit smaller). */
+@Stable
+private class CapsuleState {
+    var active by mutableStateOf(true)
+        private set
+    var tick by mutableIntStateOf(0)
+        private set
+
+    fun poke() {
+        active = true
+        tick++
+    }
+
+    fun fold() {
+        active = false
     }
 }
