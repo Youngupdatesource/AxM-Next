@@ -262,4 +262,15 @@
     <string name="terminal_select_text">Select text</string>
     <string name="terminal_select_text_hint">Long-press to select. Select all copies everything.</string>
     <string name="terminal_select_text_truncated">Showing the last %1$d lines</string>
+    <string name="terminal_search">Search output</string>
+    <string name="terminal_search_hint">Find in output</string>
+    <string name="terminal_search_previous">Previous match</string>
+    <string name="terminal_search_next">Next match</string>
+    <string name="settings_editor_scope_key">Keys</string>
+    <string name="settings_editor_scope_value">Values</string>
+    <string name="settings_editor_short_global">Global</string>
+    <string name="settings_editor_short_secure">Secure</string>
+    <string name="settings_editor_short_system">System</string>
+    <string name="settings_editor_short_prop">Properties</string>
+    <string name="settings_editor_short_env">Axeron</string>
 </resources>

@@ -262,4 +262,15 @@
     <string name="terminal_select_text">Pilih teks</string>
     <string name="terminal_select_text_hint">Tekan lama untuk memilih. Pilih semua menyalin seluruh output.</string>
     <string name="terminal_select_text_truncated">Menampilkan %1$d baris terakhir</string>
+    <string name="terminal_search">Cari di output</string>
+    <string name="terminal_search_hint">Cari di output</string>
+    <string name="terminal_search_previous">Hasil sebelumnya</string>
+    <string name="terminal_search_next">Hasil berikutnya</string>
+    <string name="settings_editor_scope_key">Kunci</string>
+    <string name="settings_editor_scope_value">Nilai</string>
+    <string name="settings_editor_short_global">Global</string>
+    <string name="settings_editor_short_secure">Aman</string>
+    <string name="settings_editor_short_system">Sistem</string>
+    <string name="settings_editor_short_prop">Properti</string>
+    <string name="settings_editor_short_env">Axeron</string>
 </resources>

@@ -8,6 +8,25 @@ import android.view.ViewOutlineProvider
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -148,6 +167,8 @@ fun terminalTextStyle(scale: Float = TerminalPrefs.textScale): TextStyle = TextS
  * @param color per-kind base colour; ANSI colours in the text still win.
  * @param textViewerOpen shows the full-screen text viewer (every line, "select all" works).
  * Long-press on the output itself selects text in place; the viewer is only opened explicitly.
+ * @param searchOpen shows the find bar (query, current/total, previous / next). Search is only
+ * offered when [onSearchOpenChange] is set; the owner toggles it (top bar button, nav capsule).
  */
 @Composable
 fun <K : Any> TerminalOutput(
@@ -161,6 +182,8 @@ fun <K : Any> TerminalOutput(
     state: LazyListState = rememberLazyListState(),
     textViewerOpen: Boolean = false,
     onTextViewerDismiss: () -> Unit = {},
+    searchOpen: Boolean = false,
+    onSearchOpenChange: ((Boolean) -> Unit)? = null,
 ) {
     val showLineNumbers = TerminalPrefs.lineNumbers
     val style = terminalTextStyle()
@@ -235,13 +258,82 @@ fun <K : Any> TerminalOutput(
     val rowHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     val columnHighlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
     var showGoTo by remember { mutableStateOf(false) }
-    var pillActive by remember { mutableStateOf(false) }
+    var pillExpanded by remember { mutableStateOf(false) }
     var pillTick by remember { mutableIntStateOf(0) }
     var thumbDragging by remember { mutableStateOf(false) }
     // Long-press selects text right in the output (SelectionContainer around the list). Lines
     // that were never composed can't be part of such a selection, so the full-text viewer stays
     // available through [textViewerOpen] for "copy everything".
     val scope = rememberCoroutineScope()
+
+    // ---- find in output ----
+    val searchEnabled = onSearchOpenChange != null
+    var query by remember { mutableStateOf("") }
+    var matches by remember { mutableStateOf(emptyList<TerminalBuffer.Match>()) }
+    var current by remember { mutableIntStateOf(-1) }
+    val matchHighlight = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)
+    val currentHighlight = MaterialTheme.colorScheme.primary
+    val onCurrentHighlight = MaterialTheme.colorScheme.onPrimary
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    // Closing the bar (from anywhere) forgets the query, so highlights disappear with it.
+    LaunchedEffect(searchOpen) { if (!searchOpen) query = "" }
+
+    /** Scrolls [match] into view with some context above, panning to it when not wrapping. */
+    suspend fun reveal(match: TerminalBuffer.Match) {
+        val v = view
+        if (v.count == 0) return
+        follow = false
+        state.scrollToItem((v.indexOf(match.position) - 3).coerceAtLeast(0))
+        if (!wrap) {
+            withFrameNanos { } // let the line measure its width first
+            pan.scrollTo(match.start * charWidth - pan.viewport / 3f)
+        }
+    }
+
+    // Re-runs as output streams in; collectLatest drops a search that new output made stale.
+    LaunchedEffect(buffer, filter, query) {
+        if (query.isEmpty()) {
+            matches = emptyList()
+            current = -1
+            return@LaunchedEffect
+        }
+        var fresh = true
+        snapshotFlow { buffer.snapshot.version }.collectLatest {
+            delay(if (fresh) 200 else 400) // typing / live-output debounce
+            val found = withContext(Dispatchers.Default) {
+                val job = coroutineContext
+                buffer.search(query, filter ?: { true }, limit = SEARCH_LIMIT, stop = { !job.isActive })
+            }
+            matches = found
+            if (fresh) {
+                // Start from the first match on screen or below it, like find-in-page.
+                val top = view.let { v ->
+                    if (v.count == 0) 0L else v.positionAt(state.firstVisibleItemIndex.coerceIn(0, v.count - 1))
+                }
+                current = found.indexOfFirst { it.position >= top }.let { if (it < 0) 0 else it }
+                found.getOrNull(current)?.let { reveal(it) }
+                fresh = false
+            } else {
+                current = current.coerceAtMost(found.lastIndex)
+            }
+        }
+    }
+
+    fun step(delta: Int) {
+        if (matches.isEmpty()) return
+        current = Math.floorMod(current + delta, matches.size)
+        val target = matches[current]
+        scope.launch { reveal(target) }
+    }
+
+    fun closeSearch() {
+        keyboard?.hide()
+        focusManager.clearFocus()
+        onSearchOpenChange?.invoke(false)
+    }
+    BackHandler(enabled = searchOpen && searchEnabled) { closeSearch() }
 
     val canScroll by remember {
         derivedStateOf { state.canScrollBackward || state.canScrollForward }
@@ -272,15 +364,25 @@ fun <K : Any> TerminalOutput(
                     val line = remember(position, version) { buffer.lineAt(position) }
                         ?: return@items
                     val mark = highlight?.takeIf { it.line == line.number }
+                    val currentStart = matches.getOrNull(current)
+                        ?.takeIf { it.position == position }?.start ?: -1
                     val parsed = remember(line.text) { line.text.toAnsiString() }
-                    val text = remember(parsed, mark) {
-                        if (mark?.column == null) parsed
-                        else parsed.withColumnMark(mark.column - 1, columnHighlight)
+                    val text = remember(parsed, mark, query, currentStart) {
+                        var t = parsed
+                        if (mark?.column != null) t = t.withColumnMark(mark.column - 1, columnHighlight)
+                        if (query.isNotEmpty()) {
+                            t = t.withMatches(
+                                query, matchHighlight, currentStart,
+                                SpanStyle(background = currentHighlight, color = onCurrentHighlight)
+                            )
+                        }
+                        t
                     }
+                    val marked = mark != null || currentStart >= 0
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(if (mark != null) Modifier.background(rowHighlight) else Modifier)
+                            .then(if (marked) Modifier.background(rowHighlight) else Modifier)
                     ) {
                         if (showLineNumbers) {
                             // Line numbers are not part of the output: keep them out of a selection.
@@ -315,12 +417,8 @@ fun <K : Any> TerminalOutput(
                 onDragStart = {
                     follow = false
                     thumbDragging = true
-                    pillTick++
                 },
-                onDragEnd = {
-                    thumbDragging = false
-                    pillTick++
-                },
+                onDragEnd = { thumbDragging = false },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(contentPadding.let {
@@ -329,19 +427,20 @@ fun <K : Any> TerminalOutput(
             )
         }
 
-        // The nav pill only shows while the user is scrolling, then slides away to uncover the output.
+        // Nav capsule: small and dimmed by default; a tap opens it, and it folds back after a
+        // moment without interaction or as soon as the user scrolls the output (it would
+        // otherwise sit on top of the text being read).
         LaunchedEffect(state) {
             state.interactionSource.interactions.collect {
-                if (it is DragInteraction.Start) pillTick++
+                if (it is DragInteraction.Start) pillExpanded = false
             }
         }
         LaunchedEffect(pillTick) {
             if (pillTick == 0) return@LaunchedEffect
-            pillActive = true
-            delay(300)
-            snapshotFlow { state.isScrollInProgress }.first { !it }
+            pillExpanded = true
             delay(PILL_IDLE_MS)
-            pillActive = false
+            snapshotFlow { state.isScrollInProgress }.first { !it }
+            pillExpanded = false
         }
 
         val currentLine by remember {
@@ -351,12 +450,32 @@ fun <K : Any> TerminalOutput(
                 else v.positionAt(state.firstVisibleItemIndex.coerceIn(0, v.count - 1)) + 1
             }
         }
+
         AnimatedVisibility(
-            visible = canScroll && view.count > 0 && (pillActive || thumbDragging),
-            enter = fadeIn() + scaleIn(initialScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f)) +
-                    slideInHorizontally { it / 2 },
-            exit = fadeOut() + scaleOut(targetScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f)) +
-                    slideOutHorizontally { it },
+            visible = searchOpen && searchEnabled,
+            enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.92f, transformOrigin = TransformOrigin(0.5f, 0f)),
+            exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.92f, transformOrigin = TransformOrigin(0.5f, 0f)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = contentPadding.calculateTopPadding())
+                .padding(horizontal = 4.dp)
+        ) {
+            TerminalSearchBar(
+                query = query,
+                onQueryChange = { query = it },
+                current = current,
+                total = matches.size,
+                capped = matches.size >= SEARCH_LIMIT,
+                onPrevious = { step(-1) },
+                onNext = { step(1) },
+                onClose = { closeSearch() }
+            )
+        }
+
+        AnimatedVisibility(
+            visible = canScroll && view.count > 0,
+            enter = fadeIn() + scaleIn(initialScale = 0.7f, transformOrigin = TransformOrigin(1f, 1f)),
+            exit = fadeOut() + scaleOut(targetScale = 0.7f, transformOrigin = TransformOrigin(1f, 1f)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(jumpButtonPadding)
@@ -368,6 +487,14 @@ fun <K : Any> TerminalOutput(
                 currentLine = currentLine,
                 following = follow,
                 canScrollUp = state.canScrollBackward,
+                expanded = pillExpanded,
+                emphasized = thumbDragging || (searchOpen && searchEnabled),
+                searchEnabled = searchEnabled,
+                onExpand = { pillTick++ },
+                onSearch = {
+                    pillTick++
+                    onSearchOpenChange?.invoke(true)
+                },
                 onTop = {
                     pillTick++
                     follow = false
@@ -428,7 +555,10 @@ fun <K : Any> TerminalOutput(
 }
 
 private const val SCROLLBAR_MIN_LINES = 200
-private const val PILL_IDLE_MS = 1800L
+private const val PILL_IDLE_MS = 2500L
+
+/** Matches kept per search; enough to step through, bounded for million-line output. */
+private const val SEARCH_LIMIT = 10_000
 
 /** Lines handed to the native text view; keeps a runaway buffer from exhausting memory. */
 private const val VIEWER_MAX_LINES = 30_000
@@ -705,54 +835,192 @@ private fun <K : Any> TextSelectDialog(
     }
 }
 
+/** Find bar: query, "current/total" and previous / next / close. */
+@Composable
+private fun TerminalSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    current: Int,
+    total: Int,
+    capped: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val content = MaterialTheme.colorScheme.onSecondaryContainer
+    val textStyle = MaterialTheme.typography.bodyMedium.copy(color = content)
+
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shadowElevation = 3.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .height(44.dp)
+                .padding(start = 14.dp, end = 2.dp)
+        ) {
+            Icon(
+                Icons.Filled.Search,
+                contentDescription = null,
+                tint = content.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = textStyle,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onNext() }),
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focus),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.terminal_search_hint),
+                                style = textStyle,
+                                color = content.copy(alpha = 0.6f),
+                                maxLines = 1
+                            )
+                        }
+                        inner()
+                    }
+                }
+            )
+            if (query.isNotEmpty()) {
+                Text(
+                    text = if (total == 0) "0/0"
+                    else "${current + 1}/$total${if (capped) "+" else ""}",
+                    style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+                    color = if (total == 0) MaterialTheme.colorScheme.error else content,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+            IconButton(onClick = onPrevious, enabled = total > 0, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Filled.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.terminal_search_previous)
+                )
+            }
+            IconButton(onClick = onNext, enabled = total > 0, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Filled.KeyboardArrowDown,
+                    contentDescription = stringResource(R.string.terminal_search_next)
+                )
+            }
+            IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
+            }
+        }
+    }
+}
+
+/**
+ * Navigation capsule. Folded (default) it is a small dimmed chip with the current line, so it
+ * covers as little output as possible; [expanded] unfolds search / top / go-to / bottom with a
+ * soft size animation and full opacity. The owner folds it again after a moment without
+ * interaction or when the output is scrolled.
+ */
 @Composable
 private fun TerminalNavPill(
     currentLine: Long?,
     following: Boolean,
     canScrollUp: Boolean,
+    expanded: Boolean,
+    emphasized: Boolean,
+    searchEnabled: Boolean,
+    onExpand: () -> Unit,
+    onSearch: () -> Unit,
     onTop: () -> Unit,
     onGoTo: () -> Unit,
     onBottom: () -> Unit,
 ) {
+    val alpha by animateFloatAsState(
+        targetValue = if (expanded || emphasized) 1f else 0.5f,
+        animationSpec = tween(durationMillis = 320),
+        label = "pillAlpha"
+    )
+    val elevation by animateDpAsState(
+        targetValue = if (expanded) 4.dp else 0.dp,
+        animationSpec = tween(durationMillis = 280),
+        label = "pillElevation"
+    )
+    val content = MaterialTheme.colorScheme.onSecondaryContainer
+    val sizeSpec = spring<IntSize>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+    val enter = fadeIn(tween(220)) + expandVertically(spring(stiffness = Spring.StiffnessMediumLow))
+    val exit = fadeOut(tween(140)) + shrinkVertically(spring(stiffness = Spring.StiffnessMediumLow))
+
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.secondaryContainer,
-        shadowElevation = 3.dp
+        shadowElevation = elevation,
+        modifier = Modifier.graphicsLayer { this.alpha = alpha }
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            IconButton(onClick = onTop, enabled = canScrollUp) {
-                Icon(
-                    Icons.Filled.KeyboardDoubleArrowUp,
-                    contentDescription = stringResource(R.string.terminal_scroll_top)
-                )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.animateContentSize(sizeSpec)
+        ) {
+            AnimatedVisibility(visible = expanded, enter = enter, exit = exit) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (searchEnabled) {
+                        IconButton(onClick = onSearch) {
+                            Icon(
+                                Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.terminal_search)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onTop, enabled = canScrollUp) {
+                        Icon(
+                            Icons.Filled.KeyboardDoubleArrowUp,
+                            contentDescription = stringResource(R.string.terminal_scroll_top)
+                        )
+                    }
+                }
             }
+            // Always visible: folded, a tap opens the capsule; opened, a tap goes to a line.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .padding(horizontal = 4.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onGoTo)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .clickable { if (expanded) onGoTo() else onExpand() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.terminal_line_short),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                )
+                AnimatedVisibility(visible = expanded, enter = enter, exit = exit) {
+                    Text(
+                        text = stringResource(R.string.terminal_line_short),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = content.copy(alpha = 0.7f)
+                    )
+                }
                 Text(
                     text = currentLine?.toString() ?: "–",
                     style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                    color = content
                 )
             }
-            IconButton(onClick = onBottom) {
-                Icon(
-                    Icons.Filled.KeyboardDoubleArrowDown,
-                    contentDescription = stringResource(R.string.terminal_scroll_bottom),
-                    // Highlighted while new output is not being followed.
-                    tint = if (following) MaterialTheme.colorScheme.onSecondaryContainer
-                    else MaterialTheme.colorScheme.primary
-                )
+            AnimatedVisibility(visible = expanded, enter = enter, exit = exit) {
+                IconButton(onClick = onBottom) {
+                    Icon(
+                        Icons.Filled.KeyboardDoubleArrowDown,
+                        contentDescription = stringResource(R.string.terminal_scroll_bottom),
+                        // Highlighted while new output is not being followed.
+                        tint = if (following) content else MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
@@ -849,6 +1117,29 @@ private const val ESC = '\u001B'
 /** Most lines carry no ANSI codes; skip the parser for those. */
 private fun String.toAnsiString(): AnnotatedString =
     if (indexOf(ESC) < 0) AnnotatedString(this) else parseAsAnsiAnnotatedString()
+
+/**
+ * Marks every occurrence of [query] (ignoring case) with [color]; the one starting at
+ * [currentStart] gets [currentStyle] instead.
+ */
+private fun AnnotatedString.withMatches(
+    query: String,
+    color: Color,
+    currentStart: Int,
+    currentStyle: SpanStyle
+): AnnotatedString {
+    var i = text.indexOf(query, ignoreCase = true)
+    if (i < 0) return this
+    val source = this
+    return buildAnnotatedString {
+        append(source)
+        while (i >= 0) {
+            val style = if (i == currentStart) currentStyle else SpanStyle(background = color)
+            addStyle(style, i, i + query.length)
+            i = source.text.indexOf(query, i + query.length, ignoreCase = true)
+        }
+    }
+}
 
 private fun AnnotatedString.withColumnMark(index: Int, color: Color): AnnotatedString {
     if (index !in indices) return this

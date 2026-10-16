@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Bolt
@@ -74,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -170,6 +172,10 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
 
     var showExtraDialog by remember { mutableStateOf(false) }
     var showTextViewer by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+
+    // Nothing left to search once the output is cleared.
+    LaunchedEffect(hasLogs) { if (!hasLogs) showSearch = false }
 
     ExtraSettings(
         showExtraDialog,
@@ -211,6 +217,17 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
                     }
                     IconButton(
+                        onClick = { showSearch = !showSearch },
+                        enabled = hasLogs
+                    ) {
+                        Icon(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.terminal_search),
+                            tint = if (showSearch) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
                         onClick = { showTextViewer = true },
                         enabled = hasLogs
                     ) {
@@ -250,6 +267,9 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         val context = LocalContext.current
         val focusManager = LocalFocusManager.current
         var keyboardVisible by remember { mutableStateOf(false) }
+        // The IME also opens for the search bar; only the command field should grow the card.
+        var commandFocused by remember { mutableStateOf(false) }
+        val expandCommand = keyboardVisible && commandFocused
         val keyboardController = LocalSoftwareKeyboardController.current
 
         KeyEventBlocker {
@@ -322,6 +342,8 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
                 textViewerOpen = showTextViewer,
                 onTextViewerDismiss = { showTextViewer = false },
+                searchOpen = showSearch,
+                onSearchOpenChange = { showSearch = it },
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -339,7 +361,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 modifier = Modifier
                     .fillMaxWidth()
                     .run {
-                        if (keyboardVisible) {
+                        if (expandCommand) {
                             padding(bottom = paddingHeight)
                         } else {
                             padding(bottom = 0.dp)
@@ -366,7 +388,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                             ),
                             fontFamily = FontFamily.Monospace
                         ),
-                        maxLines = if (keyboardVisible) Int.MAX_VALUE else 1,
+                        maxLines = if (expandCommand) Int.MAX_VALUE else 1,
                         colors = TextFieldDefaults.colors(
                             focusedIndicatorColor = Color.Transparent,   // garis saat fokus
                             unfocusedIndicatorColor = Color.Transparent, // garis saat tidak fokus
@@ -377,6 +399,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onFocusChanged { commandFocused = it.hasFocus }
                             .animateContentSize(
                                 animationSpec = tween(
                                     durationMillis = 250,
