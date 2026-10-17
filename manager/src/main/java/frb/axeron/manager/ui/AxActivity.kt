@@ -314,9 +314,8 @@ class AxActivity : ComponentActivity() {
         }
 
         // --- floating nav capsule ---
-        // Icons never move or resize; only opacity/scale change, so a tap always lands where it
-        // looks like it will. Active: right after a tap / tab change. Idle (2.5 s) or while the
-        // content scrolls underneath: slightly smaller and dimmer.
+        // Active: right after a tap / tab change. Idle (2.5 s) or while the content scrolls
+        // underneath: the capsule dims (size and shadow stay as they are).
         val capsule = remember { CapsuleState() }
         val capsuleScroll = remember(capsule) {
             object : NestedScrollConnection {
@@ -569,8 +568,9 @@ class AxActivity : ComponentActivity() {
         capsule: CapsuleState,
         swipe: TabSwipeState
     ) {
-        // Saat idle isi kapsul hanya sedikit memudar. Ukuran dan shadow tetap, jadi kapsul
-        // tidak mengecil dan shadow-nya tidak ikut hilang.
+        // Saat idle (tidak ada interaksi / konten sedang di-scroll) kapsul meredup: badan dan isinya
+        // memudar ke 0,85. Ukuran tidak berubah dan shadow dibiarkan penuh (alpha-nya sengaja
+        // tidak dipasang di layer Surface, supaya shadow tidak ikut memudar).
         val fade by animateFloatAsState(
             targetValue = if (capsule.active) 1f else 0.85f,
             animationSpec = tween(durationMillis = 350),
@@ -584,7 +584,7 @@ class AxActivity : ComponentActivity() {
         ) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = fade),
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 shadowElevation = CapsuleShadow
             ) {
