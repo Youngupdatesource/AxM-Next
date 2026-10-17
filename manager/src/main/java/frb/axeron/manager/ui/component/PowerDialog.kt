@@ -185,7 +185,7 @@ fun PowerDialog(
                         Icon(
                             imageVector = Icons.Default.LocalFireDepartment,
                             contentDescription = "Reignite",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.size(28.dp)
                         )
                     }

@@ -59,6 +59,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.AxeronPluginService
 import frb.axeron.api.AxeronPluginService.ensureManageExternalStorageAllowed
@@ -93,7 +94,7 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
         }
     }
 
-    val listState = rememberLazyListState()
+    val listState = LocalTabScrollStates.current?.plugin ?: rememberLazyListState()
     var showFab by remember { mutableStateOf(true) }
 
     LaunchedEffect(listState) {

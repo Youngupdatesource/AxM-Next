@@ -1,6 +1,9 @@
 package frb.axeron.manager.ui.util
 
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -16,3 +19,18 @@ val LocalSnackbarHost = compositionLocalOf<SnackbarHostState> {
  * Bernilai 0.dp di luar layar tab.
  */
 val LocalCapsuleInset = compositionLocalOf<Dp> { 0.dp }
+
+/**
+ * Posisi scroll empat layar tab, dipegang di AxActivity (bukan di tiap layar). Layar asli dan
+ * salinan preview saat geser antar tab memakai state yang sama, jadi preview tidak pernah
+ * menampilkan daftar di posisi paling atas lalu "melompat" saat layar asli muncul.
+ */
+@Stable
+class TabScrollStates(
+    val home: ScrollState,
+    val privilege: LazyListState,
+    val plugin: LazyListState,
+    val settings: ScrollState
+)
+
+val LocalTabScrollStates = compositionLocalOf<TabScrollStates?> { null }

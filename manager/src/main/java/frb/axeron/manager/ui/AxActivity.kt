@@ -54,6 +54,8 @@ import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
@@ -94,6 +96,8 @@ import frb.axeron.manager.ui.screen.PrivilegeScreen
 import frb.axeron.manager.ui.screen.SettingsScreen
 import frb.axeron.manager.ui.screen.plugin.PluginScreen
 import frb.axeron.manager.ui.util.LocalCapsuleInset
+import frb.axeron.manager.ui.util.LocalTabScrollStates
+import frb.axeron.manager.ui.util.TabScrollStates
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
@@ -141,6 +145,7 @@ import com.ramcosta.composedestinations.generated.destinations.ExecutePluginActi
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.HomeScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.QuickShellScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.SettingsEditorScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.navigation.dependency
 import com.ramcosta.composedestinations.utils.isRouteOnBackStackAsState
@@ -315,22 +320,11 @@ class AxActivity : ComponentActivity() {
         }
 
         // --- floating nav capsule ---
-        // Active: right after a tap / tab change. Idle (2.5 s) or while the content scrolls
-        // underneath: the capsule dims (size and shadow stay as they are).
-        val capsule = remember { CapsuleState() }
-        val capsuleScroll = remember(capsule) {
-            object : NestedScrollConnection {
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (source == NestedScrollSource.UserInput && abs(available.y) > 1f) capsule.fold()
-                    return Offset.Zero
-                }
-            }
+        // Kapsul hanya meredup saat QuickShell atau Settings Editor sedang terbuka. Di layar lain
+        // selalu terang penuh (tidak ada redup otomatis saat idle / saat konten di-scroll).
+        val dimCapsule = currentDestination?.route.let {
+            it == QuickShellScreenDestination.route || it == SettingsEditorScreenDestination.route
         }
-        LaunchedEffect(capsule.tick) {
-            delay(2500)
-            capsule.fold()
-        }
-        LaunchedEffect(currentDestination?.route) { capsule.poke() }
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -338,6 +332,16 @@ class AxActivity : ComponentActivity() {
         // melayang di atasnya. Ruang kapsul dikirim lewat LocalCapsuleInset; tiap layar memakainya
         // sebagai padding bawah konten scroll / FAB / snackbar.
         val capsuleInset = if (showBottomBar) CapsuleReserve + navInset else 0.dp
+
+        // Posisi scroll empat layar tab dipegang di sini, dipakai bersama oleh layar asli dan
+        // preview geser, supaya preview tidak pernah mulai dari atas lalu melompat.
+        val homeScroll = rememberScrollState()
+        val privilegeList = rememberLazyListState()
+        val pluginList = rememberLazyListState()
+        val settingsScroll = rememberScrollState()
+        val tabScroll = remember(homeScroll, privilegeList, pluginList, settingsScroll) {
+            TabScrollStates(homeScroll, privilegeList, pluginList, settingsScroll)
+        }
 
         // Geser kiri/kanan antar tab: konten mengikuti jari, tab tetangga ikut terlihat (preview),
         // lepas jari -> pindah kalau cukup jauh atau cukup cepat, kalau tidak balik ke semula.
@@ -369,7 +373,8 @@ class AxActivity : ComponentActivity() {
             ) { innerPadding ->
                 CompositionLocalProvider(
                     LocalSnackbarHost provides snackBarHostState,
-                    LocalCapsuleInset provides capsuleInset
+                    LocalCapsuleInset provides capsuleInset,
+                    LocalTabScrollStates provides tabScroll
                 ) {
                     Box(
                         modifier = Modifier
@@ -384,17 +389,13 @@ class AxActivity : ComponentActivity() {
                                 } else Modifier
                             )
                             .onSizeChanged { swipe.width = it.width.toFloat() }
-                            .nestedScroll(capsuleScroll)
                             // Dipasang di parent, jadi komponen anak yang sudah memakai drag
                             // horizontal (slider, dll) tetap menang.
                             .draggable(
                                 state = dragState,
                                 orientation = Orientation.Horizontal,
                                 enabled = showBottomBar && currentTabIndex >= 0,
-                                onDragStarted = {
-                                    swipe.beginDrag()
-                                    capsule.poke()
-                                },
+                                onDragStarted = { swipe.beginDrag() },
                                 onDragStopped = { velocity ->
                                     if (!swipe.handingOff && swipe.offsetPx != 0f) {
                                         val goingNext = swipe.offsetPx < 0f
@@ -466,7 +467,7 @@ class AxActivity : ComponentActivity() {
                     navigator,
                     activateViewModel.axeronInfo,
                     pluginViewModel.pluginUpdateCount,
-                    capsule,
+                    dimCapsule,
                     swipe
                 )
             }
@@ -566,21 +567,21 @@ class AxActivity : ComponentActivity() {
         navigator: DestinationsNavigator,
         axeronServerInfo: AxeronInfo,
         moduleUpdateCount: Int,
-        capsule: CapsuleState,
+        dimmed: Boolean,
         swipe: TabSwipeState
     ) {
-        // Saat idle (tidak ada interaksi / konten sedang di-scroll) kapsul meredup: badan dan isinya
+        // Saat [dimmed] (QuickShell / Settings Editor terbuka) kapsul meredup: badan dan isinya
         // memudar ke 0,85. Ukuran tidak berubah dan shadow dibiarkan penuh (alpha-nya sengaja
         // tidak dipasang di layer Surface, supaya shadow tidak ikut memudar).
         val fade by animateFloatAsState(
-            targetValue = if (capsule.active) 1f else 0.85f,
+            targetValue = if (dimmed) 0.85f else 1f,
             animationSpec = tween(durationMillis = 350),
             label = "capsuleFade"
         )
-        // 1f = aktif, 0f = idle. Area tab terpilih (pill + ikon + label) meredup lebih kuat
-        // daripada badan kapsul, supaya tidak terlalu kontras saat tidak ada interaksi.
+        // 1f = normal, 0f = meredup. Area tab terpilih (pill + ikon + label) meredup lebih kuat
+        // daripada badan kapsul, supaya tidak terlalu kontras.
         val activeAmount by animateFloatAsState(
-            targetValue = if (capsule.active) 1f else 0f,
+            targetValue = if (dimmed) 0f else 1f,
             animationSpec = tween(durationMillis = 350),
             label = "capsuleActiveAmount"
         )
@@ -610,9 +611,32 @@ class AxActivity : ComponentActivity() {
                 // tab berganti lewat tap; saat digeser/di-hold indikator langsung mengikuti jari.
                 // Dibaca di fase layout/draw, tanpa recomposition per frame.
                 LaunchedEffect(selectedIndex) {
-                    if (selectedIndex >= 0) {
+                    if (selectedIndex < 0) return@LaunchedEffect
+                    val to = selectedIndex.toFloat()
+                    val from = swipe.pill.value
+                    val restingAtTab = from == floor(from)
+                    if (restingAtTab && abs(to - from) >= 1f && !swipe.scrubbing && swipe.offsetPx == 0f) {
+                        // Pindah lewat tap: hanya tab asal (menyempit) dan tab tujuan (melebar)
+                        // yang berubah; tab yang "dilewati" tidak ikut melebar, tidak ikut
+                        // disorot, dan labelnya tidak digambar. Jauh lebih ringan di perangkat
+                        // low-end daripada meluncur melewati tiap ikon.
+                        swipe.tapFrom = from.toInt()
+                        swipe.tapTo = selectedIndex
+                        try {
+                            swipe.pill.animateTo(
+                                targetValue = to,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 650f
+                                )
+                            )
+                        } finally {
+                            swipe.tapFrom = -1
+                            swipe.tapTo = -1
+                        }
+                    } else {
                         swipe.pill.animateTo(
-                            targetValue = selectedIndex.toFloat(),
+                            targetValue = to,
                             animationSpec = spring(
                                 dampingRatio = 0.72f,
                                 stiffness = Spring.StiffnessMediumLow
@@ -620,10 +644,15 @@ class AxActivity : ComponentActivity() {
                         )
                     }
                 }
-                // Ikon yang sedang "di bawah" indikator ikut disorot, jadi preview terasa nyambung.
+                // Digeser/di-hold: ikon di bawah indikator ikut disorot (preview nyambung).
+                // Tap: sorotan langsung pindah ke tujuan, tanpa menyorot ikon yang dilewati.
                 val highlighted by remember(selectedIndex, maxIdx) {
                     derivedStateOf {
-                        if (selectedIndex < 0) -1 else swipe.position(maxIdx).roundToInt()
+                        when {
+                            selectedIndex < 0 -> -1
+                            swipe.isTapping -> swipe.tapTo
+                            else -> swipe.position(maxIdx).roundToInt()
+                        }
                     }
                 }
                 val goTo: (BottomBarDestination) -> Unit = { destination ->
@@ -679,7 +708,7 @@ class AxActivity : ComponentActivity() {
                 val pillColor = MaterialTheme.colorScheme.secondaryContainer
                 // Posisi jari -> indeks indikator kontinu (indikator berpusat di bawah jari).
                 val scrubIndexAt: (Float) -> Float = { x ->
-                    metrics.pAtX(x, swipe.position(maxIdx))
+                    metrics.pAtX(x, swipe, maxIdx)
                 }
 
                 Box(
@@ -694,7 +723,6 @@ class AxActivity : ComponentActivity() {
                                     swipe.job?.cancel()
                                     swipe.scrubPos = scrubIndexAt(offset.x)
                                     swipe.scrubbing = true
-                                    capsule.poke()
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 },
                                 onDrag = { change, _ ->
@@ -745,9 +773,8 @@ class AxActivity : ComponentActivity() {
                             // Indikator terpilih: satu pill yang meluncur dan melebar mengikuti
                             // item yang sedang "terpilih" (ikon + label).
                             if (metrics.count == 0) return@drawBehind
-                            val p = swipe.position(maxIdx)
-                            val l = metrics.pillLeft(p)
-                            val r = metrics.pillRight(p)
+                            val l = metrics.pillLeft(swipe, maxIdx)
+                            val r = metrics.pillRight(swipe, maxIdx)
                             val h = size.height * grabScale
                             val w = (r - l) * grabScale
                             val cx = (l + r) / 2f
@@ -771,17 +798,15 @@ class AxActivity : ComponentActivity() {
                                     else lerp(CapsuleIdleIconAlpha, CapsuleIconAlpha, activeAmount)
                                 },
                                 widthPx = {
-                                    val p = if (selectedIndex < 0) -10f else swipe.position(maxIdx)
-                                    metrics.width(index, p).roundToInt()
+                                    if (selectedIndex < 0) metrics.basePx.roundToInt()
+                                    else metrics.width(index, swipe, maxIdx).roundToInt()
                                 },
                                 expansion = {
-                                    if (selectedIndex < 0) 0f
-                                    else metrics.expansion(index, swipe.position(maxIdx))
+                                    if (selectedIndex < 0) 0f else swipe.expansion(index, maxIdx)
                                 },
                                 onClick = {
                                     // Klik yang menyusul setelah hold-geser tidak boleh ikut dieksekusi.
                                     if (!swipe.scrubbing) {
-                                        capsule.poke()
                                         if (index == selectedIndex) {
                                             navigator.popBackStack(destination.direction, false)
                                         }
@@ -915,6 +940,37 @@ private class TabSwipeState {
     var scrubbing by mutableStateOf(false)
     var scrubPos by mutableFloatStateOf(0f)
 
+    /** Animasi tap di kapsul: dari tab [tapFrom] ke [tapTo] (-1 = tidak sedang tap). */
+    var tapFrom by mutableIntStateOf(-1)
+    var tapTo by mutableIntStateOf(-1)
+
+    val isTapping: Boolean
+        get() = tapFrom >= 0 && tapTo >= 0 && tapFrom != tapTo && !scrubbing && offsetPx == 0f
+
+    private fun tapT(): Float = ((pill.value - tapFrom) / (tapTo - tapFrom).toFloat()).coerceIn(0f, 1f)
+
+    /** Seberapa "terpilih" (melebar + label tampak) item [index]: 0f..1f. */
+    fun expansion(index: Int, maxIndex: Float): Float =
+        if (isTapping) {
+            when (index) {
+                tapTo -> tapT()
+                tapFrom -> 1f - tapT()
+                else -> 0f
+            }
+        } else {
+            max(0f, 1f - abs(position(maxIndex) - index))
+        }
+
+    /** Dua item yang diapit indikator dan pecahan di antaranya (untuk menggambar pill). */
+    fun spanFrom(maxIndex: Float): Int =
+        if (isTapping) tapFrom else floor(position(maxIndex)).toInt().coerceIn(0, maxIndex.toInt())
+
+    fun spanTo(maxIndex: Float): Int =
+        if (isTapping) tapTo else min(spanFrom(maxIndex) + 1, maxIndex.toInt())
+
+    fun spanFraction(maxIndex: Float): Float =
+        if (isTapping) tapT() else (position(maxIndex) - spanFrom(maxIndex)).coerceIn(0f, 1f)
+
     /** Posisi indikator kapsul sebagai indeks kontinu: hold-geser > tap/spring + progres geser konten. */
     fun position(maxIndex: Float): Float =
         (if (scrubbing) scrubPos else pill.value + progress).coerceIn(0f, maxIndex)
@@ -1003,24 +1059,6 @@ private class TabSwipeState {
     }
 }
 
-/** Shared state of the floating nav capsule: [active] (full) vs idle (dimmer, a bit smaller). */
-@Stable
-private class CapsuleState {
-    var active by mutableStateOf(true)
-        private set
-    var tick by mutableIntStateOf(0)
-        private set
-
-    fun poke() {
-        active = true
-        tick++
-    }
-
-    fun fold() {
-        active = false
-    }
-}
-
 // Ukuran & posisi kapsul nav. CapsuleGap = jarak kapsul dari tepi bawah (di atas nav bar sistem)
 // supaya benar-benar melayang; CapsuleReserve = ruang yang disisakan untuk konten di bawahnya.
 // Ukuran kapsul nav. CapsuleItemWidth = lebar item saat hanya ikon; item terpilih melebar
@@ -1046,8 +1084,8 @@ private const val CapsuleIconAlpha = 0.75f
 private val CapsuleReserve = CapsuleItemHeight + 12.dp + CapsuleGap
 
 /**
- * Geometri kapsul sebagai fungsi posisi indikator [p] (indeks kontinu). Item ke-i melebar
- * sebesar extras[i] * expansion(i, p); indikator = interpolasi tepi dua item terdekat.
+ * Geometri kapsul. Item ke-i melebar sebesar extras[i] * expansion(i); indikator = interpolasi
+ * tepi dua item yang diapitnya. Semua dihitung dari [TabSwipeState] (mode tap atau mode jari).
  */
 private class CapsuleMetrics(
     val basePx: Float,
@@ -1056,34 +1094,34 @@ private class CapsuleMetrics(
 ) {
     val count: Int get() = extras.size
 
-    fun expansion(index: Int, p: Float): Float = max(0f, 1f - abs(p - index))
+    fun width(index: Int, sw: TabSwipeState, maxIdx: Float): Float =
+        basePx + sw.expansion(index, maxIdx) * extras[index]
 
-    fun width(index: Int, p: Float): Float = basePx + expansion(index, p) * extras[index]
-
-    fun left(index: Int, p: Float): Float {
+    fun left(index: Int, sw: TabSwipeState, maxIdx: Float): Float {
         var x = 0f
-        for (j in 0 until index) x += width(j, p) + gapPx
+        for (j in 0 until index) x += width(j, sw, maxIdx) + gapPx
         return x
     }
 
-    private fun right(index: Int, p: Float): Float = left(index, p) + width(index, p)
+    private fun right(index: Int, sw: TabSwipeState, maxIdx: Float): Float =
+        left(index, sw, maxIdx) + width(index, sw, maxIdx)
 
-    fun pillLeft(p: Float): Float {
-        val i0 = floor(p).toInt().coerceIn(0, count - 1)
-        val i1 = min(i0 + 1, count - 1)
-        return lerp(left(i0, p), left(i1, p), (p - i0).coerceIn(0f, 1f))
+    fun pillLeft(sw: TabSwipeState, maxIdx: Float): Float {
+        val i0 = sw.spanFrom(maxIdx).coerceIn(0, count - 1)
+        val i1 = sw.spanTo(maxIdx).coerceIn(0, count - 1)
+        return lerp(left(i0, sw, maxIdx), left(i1, sw, maxIdx), sw.spanFraction(maxIdx))
     }
 
-    fun pillRight(p: Float): Float {
-        val i0 = floor(p).toInt().coerceIn(0, count - 1)
-        val i1 = min(i0 + 1, count - 1)
-        return lerp(right(i0, p), right(i1, p), (p - i0).coerceIn(0f, 1f))
+    fun pillRight(sw: TabSwipeState, maxIdx: Float): Float {
+        val i0 = sw.spanFrom(maxIdx).coerceIn(0, count - 1)
+        val i1 = sw.spanTo(maxIdx).coerceIn(0, count - 1)
+        return lerp(right(i0, sw, maxIdx), right(i1, sw, maxIdx), sw.spanFraction(maxIdx))
     }
 
     /** Kebalikan dari pusat indikator: posisi x (px, relatif ke tepi kiri baris item) -> indeks kontinu. */
-    fun pAtX(x: Float, current: Float): Float {
+    fun pAtX(x: Float, sw: TabSwipeState, maxIdx: Float): Float {
         if (count <= 1) return 0f
-        val c = FloatArray(count) { left(it, current) + width(it, current) / 2f }
+        val c = FloatArray(count) { left(it, sw, maxIdx) + width(it, sw, maxIdx) / 2f }
         if (x <= c[0]) return 0f
         if (x >= c[count - 1]) return (count - 1).toFloat()
         var i = 0

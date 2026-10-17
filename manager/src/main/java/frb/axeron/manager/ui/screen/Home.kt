@@ -89,6 +89,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ActivateScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.QuickShellScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.Axeron
 import frb.axeron.api.AxeronCommandSession
@@ -229,7 +230,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
             modifier = Modifier
                 .padding(innerPadding)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(LocalTabScrollStates.current?.home ?: rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(top = 12.dp)
                 .padding(bottom = LocalCapsuleInset.current + 16.dp),

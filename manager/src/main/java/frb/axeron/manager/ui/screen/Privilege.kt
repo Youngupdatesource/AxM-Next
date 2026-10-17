@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AppIcon
@@ -59,7 +60,7 @@ fun PrivilegeScreen(
 ) {
     val privilegeViewModel = viewModelGlobal.privilegeViewModel
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-    val listState = rememberLazyListState()
+    val listState = LocalTabScrollStates.current?.privilege ?: rememberLazyListState()
 
     UseLifecycle(
         {
