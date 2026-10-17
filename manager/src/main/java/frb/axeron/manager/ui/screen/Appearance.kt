@@ -59,6 +59,7 @@ import com.maxkeppeler.sheets.list.models.ListSelection
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.component.BannerSettingItems
@@ -87,7 +88,11 @@ fun AppearanceScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 scrollBehavior = scrollBehavior
             )
         },
-        snackbarHost = { SnackbarHost(snackBarHost) }
+        snackbarHost = {
+            Box(modifier = Modifier.padding(bottom = LocalCapsuleInset.current)) {
+                SnackbarHost(snackBarHost)
+            }
+        }
     ) { paddingValues ->
 
         val isDarkMode = isSystemInDarkTheme()
@@ -98,7 +103,7 @@ fun AppearanceScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 .padding(paddingValues)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 32.dp),
+                .padding(top = 4.dp, bottom = LocalCapsuleInset.current + 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val context = LocalContext.current

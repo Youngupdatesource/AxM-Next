@@ -2,6 +2,7 @@ package frb.axeron.manager.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.component.SettingsItem
 import frb.axeron.manager.ui.util.LocalSnackbarHost
@@ -49,14 +51,19 @@ fun DeveloperScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModel
                 scrollBehavior = scrollBehavior
             )
         },
-        snackbarHost = { SnackbarHost(snackBarHost) }
+        snackbarHost = {
+            Box(modifier = Modifier.padding(bottom = LocalCapsuleInset.current)) {
+                SnackbarHost(snackBarHost)
+            }
+        }
     ) { paddingValues ->
 
         Column(
             modifier = Modifier
                 .padding(paddingValues)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = LocalCapsuleInset.current + 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 

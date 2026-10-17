@@ -101,6 +101,7 @@ import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.Axeron
 import frb.axeron.api.utils.AnsiFilter
 import frb.axeron.manager.R
@@ -229,6 +230,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
         floatingActionButton = {
             AnimatedVisibility(
                 visible = fabVisible && hasLogs,
+                modifier = Modifier.padding(bottom = LocalCapsuleInset.current),
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
             ) {
@@ -242,7 +244,11 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 }
             }
         },
-        snackbarHost = { AxSnackBarHost(hostState = snackBarHost) }
+        snackbarHost = {
+            Box(modifier = Modifier.padding(bottom = LocalCapsuleInset.current)) {
+                AxSnackBarHost(hostState = snackBarHost)
+            }
+        }
     ) { paddingValues ->
         val context = LocalContext.current
         val focusManager = LocalFocusManager.current
@@ -302,7 +308,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
 
             // Lift the nav pill above the Save Log button while that button is on screen.
             val jumpButtonBottom by animateDpAsState(
-                targetValue = if (fabVisible && hasLogs) 68.dp else 12.dp,
+                targetValue = (if (fabVisible && hasLogs) 68.dp else 12.dp) + LocalCapsuleInset.current,
                 label = "jumpButtonBottom"
             )
 
@@ -317,7 +323,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     start = 8.dp,
                     end = 8.dp,
                     top = 70.dp,
-                    bottom = 22.dp
+                    bottom = 22.dp + LocalCapsuleInset.current
                 ),
                 jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
                 textViewerOpen = showTextViewer,

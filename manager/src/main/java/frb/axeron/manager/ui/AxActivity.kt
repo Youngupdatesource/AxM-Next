@@ -53,6 +53,16 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.util.lerp
+import kotlin.math.floor
+import kotlin.math.min
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.gestures.Orientation
@@ -324,12 +334,10 @@ class AxActivity : ComponentActivity() {
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-        // Layar tab: konten tembus sampai tepi bawah layar dan kapsul melayang di atasnya
-        // (ruang kapsul dikirim lewat LocalCapsuleInset). Layar lain yang menampilkan kapsul
-        // tetap menyisakan ruang di bawah lewat padding seperti sebelumnya.
-        val floatingTab = currentDestination?.route in bottomBarRoutes
-        val capsuleInset = if (showBottomBar && floatingTab) CapsuleReserve + navInset else 0.dp
-        val reservedBottom = if (showBottomBar && !floatingTab) CapsuleReserve + navInset else 0.dp
+        // Semua layar yang menampilkan kapsul: konten tembus sampai tepi bawah layar dan kapsul
+        // melayang di atasnya. Ruang kapsul dikirim lewat LocalCapsuleInset; tiap layar memakainya
+        // sebagai padding bawah konten scroll / FAB / snackbar.
+        val capsuleInset = if (showBottomBar) CapsuleReserve + navInset else 0.dp
 
         // Geser kiri/kanan antar tab: konten mengikuti jari, tab tetangga ikut terlihat (preview),
         // lepas jari -> pindah kalau cukup jauh atau cukup cepat, kalau tidak balik ke semula.
@@ -366,9 +374,8 @@ class AxActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .padding(innerPadding)
-                            .padding(bottom = reservedBottom)
                             .then(
-                                if (showBottomBar && floatingTab) {
+                                if (showBottomBar) {
                                     // Nav bar sudah ditangani kapsul + LocalCapsuleInset, jadi
                                     // Scaffold di tiap layar tidak perlu menambah padding bawah lagi.
                                     Modifier.consumeWindowInsets(
@@ -562,24 +569,12 @@ class AxActivity : ComponentActivity() {
         capsule: CapsuleState,
         swipe: TabSwipeState
     ) {
-        val active = capsule.active
-        val alpha by animateFloatAsState(
-            targetValue = if (active) 1f else 0.85f,
+        // Saat idle isi kapsul hanya sedikit memudar. Ukuran dan shadow tetap, jadi kapsul
+        // tidak mengecil dan shadow-nya tidak ikut hilang.
+        val fade by animateFloatAsState(
+            targetValue = if (capsule.active) 1f else 0.85f,
             animationSpec = tween(durationMillis = 350),
-            label = "capsuleAlpha"
-        )
-        val scale by animateFloatAsState(
-            targetValue = if (active) 1f else 0.92f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            ),
-            label = "capsuleScale"
-        )
-        val shadow by animateDpAsState(
-            targetValue = if (active) 10.dp else 4.dp,
-            animationSpec = tween(durationMillis = 300),
-            label = "capsuleShadow"
+            label = "capsuleFade"
         )
 
         Box(
@@ -591,14 +586,7 @@ class AxActivity : ComponentActivity() {
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                shadowElevation = shadow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                modifier = Modifier.graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                    transformOrigin = TransformOrigin(0.5f, 1f)
-                }
+                shadowElevation = CapsuleShadow
             ) {
                 val tabs = BottomBarDestination.entries.filter {
                     axeronServerInfo.isRunning() || !it.needAxeron
@@ -608,10 +596,11 @@ class AxActivity : ComponentActivity() {
                     key(tab) { navController.isRouteOnBackStackAsState(tab.direction) }
                 }
                 val selectedIndex = selectedStates.indexOfFirst { it.value }
+                val maxIdx = (tabs.size - 1).coerceAtLeast(0).toFloat()
 
-                // Posisi pill = indeks tab (0f..n-1f) + progres geser jari. Spring dipakai saat
-                // tab berganti lewat tap; saat digeser pill langsung mengikuti jari. Semua dibaca
-                // di fase layout/draw, tanpa recomposition per frame.
+                // Posisi indikator = indeks tab (0f..n-1f) + progres geser jari. Spring dipakai saat
+                // tab berganti lewat tap; saat digeser/di-hold indikator langsung mengikuti jari.
+                // Dibaca di fase layout/draw, tanpa recomposition per frame.
                 LaunchedEffect(selectedIndex) {
                     if (selectedIndex >= 0) {
                         swipe.pill.animateTo(
@@ -623,14 +612,10 @@ class AxActivity : ComponentActivity() {
                         )
                     }
                 }
-                // Ikon yang sedang "di bawah" pill ikut disorot, jadi preview terasa nyambung.
-                val highlighted by remember(selectedIndex) {
+                // Ikon yang sedang "di bawah" indikator ikut disorot, jadi preview terasa nyambung.
+                val highlighted by remember(selectedIndex, maxIdx) {
                     derivedStateOf {
-                        when {
-                            selectedIndex < 0 -> -1
-                            swipe.scrubbing -> swipe.scrubPos.roundToInt()
-                            else -> (swipe.pill.value + swipe.progress).roundToInt()
-                        }
+                        if (selectedIndex < 0) -1 else swipe.position(maxIdx).roundToInt()
                     }
                 }
                 val goTo: (BottomBarDestination) -> Unit = { destination ->
@@ -647,7 +632,7 @@ class AxActivity : ComponentActivity() {
                 val tabsNow = rememberUpdatedState(tabs)
                 val selectedNow = rememberUpdatedState(selectedIndex)
                 val grabScale by animateFloatAsState(
-                    targetValue = if (swipe.scrubbing) 1.12f else 1f,
+                    targetValue = if (swipe.scrubbing) 1.1f else 1f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioMediumBouncy,
                         stiffness = Spring.StiffnessMedium
@@ -659,23 +644,43 @@ class AxActivity : ComponentActivity() {
                     animationSpec = tween(durationMillis = 200),
                     label = "capsulePillAlpha"
                 )
-                val stepPx = with(LocalDensity.current) {
-                    (CapsuleItemWidth + CapsuleItemGap).toPx()
+
+                // Lebar tiap item = lebar ikon + (label * seberapa "terpilih" item itu).
+                val density = LocalDensity.current
+                val textMeasurer = rememberTextMeasurer()
+                val labelStyle = MaterialTheme.typography.labelLarge
+                val labels = tabs.map { stringResource(id = it.labelId) }
+                val metrics = remember(labels, labelStyle, density) {
+                    with(density) {
+                        val maxLabel = CapsuleLabelMax.toPx().toInt()
+                        CapsuleMetrics(
+                            basePx = CapsuleItemWidth.toPx(),
+                            gapPx = CapsuleItemGap.toPx(),
+                            extras = FloatArray(labels.size) { i ->
+                                val w = textMeasurer.measure(
+                                    text = labels[i],
+                                    style = labelStyle,
+                                    softWrap = false,
+                                    maxLines = 1
+                                ).size.width
+                                CapsuleLabelGap.toPx() + w.coerceAtMost(maxLabel)
+                            }
+                        )
+                    }
                 }
-                val itemWidthPx = with(LocalDensity.current) { CapsuleItemWidth.toPx() }
-                val pillColor = MaterialTheme.colorScheme.primaryContainer
-                // Posisi jari -> indeks pill kontinu (pill berpusat di bawah jari).
+                val pillColor = MaterialTheme.colorScheme.secondaryContainer
+                // Posisi jari -> indeks indikator kontinu (indikator berpusat di bawah jari).
                 val scrubIndexAt: (Float) -> Float = { x ->
-                    ((x - itemWidthPx / 2f) / stepPx)
-                        .coerceIn(0f, (tabsNow.value.size - 1).coerceAtLeast(0).toFloat())
+                    metrics.pAtX(x, swipe.position(maxIdx))
                 }
 
                 Box(
                     modifier = Modifier
+                        .graphicsLayer { this.alpha = fade }
                         .padding(6.dp)
-                        // Tahan lalu geser: pill ikut jari, lepas = pindah ke tab di bawahnya.
+                        // Tahan lalu geser: indikator ikut jari, lepas = pindah ke tab di bawahnya.
                         // Tap biasa tetap ditangani CapsuleItem (long-press membatalkan klik).
-                        .pointerInput(stepPx, itemWidthPx) {
+                        .pointerInput(metrics) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { offset ->
                                     swipe.job?.cancel()
@@ -725,35 +730,42 @@ class AxActivity : ComponentActivity() {
                             )
                         }
                 ) {
-                    // Indikator terpilih: satu pill yang bergeser di belakang ikon.
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                val pos = if (swipe.scrubbing) swipe.scrubPos
-                                else swipe.pill.value + swipe.progress
-                                IntOffset((pos * stepPx).roundToInt(), 0)
-                            }
-                            .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
-                            .graphicsLayer {
-                                // Melar sedikit saat bergerak, kembali normal saat sampai.
-                                val springTravel = abs(swipe.pill.targetValue - swipe.pill.value)
-                                val p = abs(swipe.progress)
-                                val dragStretch = 4f * p * (1f - p) // puncak di tengah, 0 di ujung
-                                scaleX = (1f + 0.16f * max(springTravel.coerceAtMost(1f), dragStretch)) * grabScale
-                                scaleY = grabScale
-                                this.alpha = pillAlpha
-                            }
-                            .background(pillColor, CircleShape)
-                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(CapsuleItemGap)
+                        horizontalArrangement = Arrangement.spacedBy(CapsuleItemGap),
+                        modifier = Modifier.drawBehind {
+                            // Indikator terpilih: satu pill yang meluncur dan melebar mengikuti
+                            // item yang sedang "terpilih" (ikon + label).
+                            if (metrics.count == 0) return@drawBehind
+                            val p = swipe.position(maxIdx)
+                            val l = metrics.pillLeft(p)
+                            val r = metrics.pillRight(p)
+                            val h = size.height * grabScale
+                            val w = (r - l) * grabScale
+                            val cx = (l + r) / 2f
+                            drawRoundRect(
+                                color = pillColor,
+                                topLeft = Offset(cx - w / 2f, (size.height - h) / 2f),
+                                size = Size(w, h),
+                                cornerRadius = CornerRadius(h / 2f, h / 2f),
+                                alpha = pillAlpha
+                            )
+                        }
                     ) {
                         tabs.forEachIndexed { index, destination ->
                             CapsuleItem(
                                 destination = destination,
+                                label = labels[index],
                                 selected = index == highlighted,
                                 badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
+                                widthPx = {
+                                    val p = if (selectedIndex < 0) -10f else swipe.position(maxIdx)
+                                    metrics.width(index, p).roundToInt()
+                                },
+                                expansion = {
+                                    if (selectedIndex < 0) 0f
+                                    else metrics.expansion(index, swipe.position(maxIdx))
+                                },
                                 onClick = {
                                     // Klik yang menyusul setelah hold-geser tidak boleh ikut dieksekusi.
                                     if (!swipe.scrubbing) {
@@ -773,24 +785,27 @@ class AxActivity : ComponentActivity() {
     }
 
     /**
-     * Slot ukuran tetap: ikon tidak pernah berpindah tempat, jadi tap selalu kena sasaran.
-     * Latar terpilih digambar oleh pill yang bergeser di BottomBar, bukan di sini.
+     * Satu item kapsul: ikon di kiri (posisinya tetap), label muncul di kanan ikon saat item
+     * terpilih. Lebar item mengikuti [widthPx]; label bergeser dari ikon ke kanan sambil
+     * memudar masuk (dipotong oleh batas item yang ikut melebar).
      */
     @Composable
     private fun CapsuleItem(
         destination: BottomBarDestination,
+        label: String,
         selected: Boolean,
         badgeCount: Int,
+        widthPx: () -> Int,
+        expansion: () -> Float,
         onClick: () -> Unit
     ) {
-        val label = stringResource(id = destination.labelId)
         val tint by animateColorAsState(
-            targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+            targetValue = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
             else MaterialTheme.colorScheme.onSurfaceVariant,
             animationSpec = tween(durationMillis = 250),
             label = "capsuleItemTint"
         )
-        // "Pop" kecil pada ikon yang baru dipilih; area sentuh tidak berubah.
+        // "Pop" kecil pada ikon yang baru dipilih.
         val pop by animateFloatAsState(
             targetValue = if (selected) 1.12f else 1f,
             animationSpec = spring(
@@ -799,36 +814,61 @@ class AxActivity : ComponentActivity() {
             ),
             label = "capsuleItemPop"
         )
+        val labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+        val slidePx = with(LocalDensity.current) { 14.dp.toPx() }
 
         Box(
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.CenterStart,
             modifier = Modifier
-                .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
+                .layout { measurable, _ ->
+                    val w = widthPx()
+                    val h = CapsuleItemHeight.roundToPx()
+                    val placeable = measurable.measure(Constraints.fixed(w, h))
+                    layout(w, h) { placeable.place(0, 0) }
+                }
                 .clip(CircleShape)
                 .clickable(onClick = onClick)
         ) {
-            val iconContent: @Composable () -> Unit = {
-                Crossfade(
-                    targetState = selected,
-                    animationSpec = tween(durationMillis = 180),
-                    label = "capsuleItemIcon"
-                ) { isSelected ->
-                    Icon(
-                        imageVector = if (isSelected) destination.iconSelected else destination.iconNotSelected,
-                        contentDescription = label,
-                        tint = tint,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = pop
-                            scaleY = pop
-                        }
-                    )
+            Box(modifier = Modifier.padding(start = CapsuleIconStart)) {
+                val iconContent: @Composable () -> Unit = {
+                    Crossfade(
+                        targetState = selected,
+                        animationSpec = tween(durationMillis = 180),
+                        label = "capsuleItemIcon"
+                    ) { isSelected ->
+                        Icon(
+                            imageVector = if (isSelected) destination.iconSelected else destination.iconNotSelected,
+                            contentDescription = label,
+                            tint = tint,
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = pop
+                                scaleY = pop
+                            }
+                        )
+                    }
+                }
+                if (badgeCount > 0) {
+                    BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) { iconContent() }
+                } else {
+                    iconContent()
                 }
             }
-            if (badgeCount > 0) {
-                BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) { iconContent() }
-            } else {
-                iconContent()
-            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = labelColor,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    .padding(start = CapsuleIconStart + CapsuleIconSize + CapsuleLabelGap)
+                    // Ukuran asli teks dipertahankan; yang terlihat dibatasi lebar item.
+                    .wrapContentWidth(Alignment.Start, unbounded = true)
+                    .graphicsLayer {
+                        val e = expansion()
+                        alpha = e
+                        translationX = -(1f - e) * slidePx
+                    }
+            )
         }
     }
 }
@@ -859,6 +899,10 @@ private class TabSwipeState {
     /** Hold-lalu-geser pada kapsul: pill mengikuti jari, lepas = buka tab yang dituju. */
     var scrubbing by mutableStateOf(false)
     var scrubPos by mutableFloatStateOf(0f)
+
+    /** Posisi indikator kapsul sebagai indeks kontinu: hold-geser > tap/spring + progres geser konten. */
+    fun position(maxIndex: Float): Float =
+        (if (scrubbing) scrubPos else pill.value + progress).coerceIn(0f, maxIndex)
 
     /** Progres geser -1f..1f (positif = menuju tab berikutnya), dipakai pill. */
     val progress: Float
@@ -964,8 +1008,63 @@ private class CapsuleState {
 
 // Ukuran & posisi kapsul nav. CapsuleGap = jarak kapsul dari tepi bawah (di atas nav bar sistem)
 // supaya benar-benar melayang; CapsuleReserve = ruang yang disisakan untuk konten di bawahnya.
-private val CapsuleItemWidth = 60.dp
-private val CapsuleItemHeight = 48.dp
+// Ukuran kapsul nav. CapsuleItemWidth = lebar item saat hanya ikon; item terpilih melebar
+// untuk label. CapsuleGap = jarak kapsul dari tepi bawah (di atas nav bar sistem) supaya
+// benar-benar melayang; CapsuleReserve = ruang yang dipakai konten sebagai padding bawah.
+private val CapsuleItemWidth = 58.dp
+private val CapsuleItemHeight = 56.dp
 private val CapsuleItemGap = 4.dp
+private val CapsuleIconSize = 24.dp
+private val CapsuleIconStart = (CapsuleItemWidth - CapsuleIconSize) / 2
+private val CapsuleLabelGap = 8.dp
+private val CapsuleLabelMax = 96.dp
 private val CapsuleGap = 24.dp
+private val CapsuleShadow = 10.dp
 private val CapsuleReserve = CapsuleItemHeight + 12.dp + CapsuleGap
+
+/**
+ * Geometri kapsul sebagai fungsi posisi indikator [p] (indeks kontinu). Item ke-i melebar
+ * sebesar extras[i] * expansion(i, p); indikator = interpolasi tepi dua item terdekat.
+ */
+private class CapsuleMetrics(
+    val basePx: Float,
+    val gapPx: Float,
+    val extras: FloatArray
+) {
+    val count: Int get() = extras.size
+
+    fun expansion(index: Int, p: Float): Float = max(0f, 1f - abs(p - index))
+
+    fun width(index: Int, p: Float): Float = basePx + expansion(index, p) * extras[index]
+
+    fun left(index: Int, p: Float): Float {
+        var x = 0f
+        for (j in 0 until index) x += width(j, p) + gapPx
+        return x
+    }
+
+    private fun right(index: Int, p: Float): Float = left(index, p) + width(index, p)
+
+    fun pillLeft(p: Float): Float {
+        val i0 = floor(p).toInt().coerceIn(0, count - 1)
+        val i1 = min(i0 + 1, count - 1)
+        return lerp(left(i0, p), left(i1, p), (p - i0).coerceIn(0f, 1f))
+    }
+
+    fun pillRight(p: Float): Float {
+        val i0 = floor(p).toInt().coerceIn(0, count - 1)
+        val i1 = min(i0 + 1, count - 1)
+        return lerp(right(i0, p), right(i1, p), (p - i0).coerceIn(0f, 1f))
+    }
+
+    /** Kebalikan dari pusat indikator: posisi x (px, relatif ke tepi kiri baris item) -> indeks kontinu. */
+    fun pAtX(x: Float, current: Float): Float {
+        if (count <= 1) return 0f
+        val c = FloatArray(count) { left(it, current) + width(it, current) / 2f }
+        if (x <= c[0]) return 0f
+        if (x >= c[count - 1]) return (count - 1).toFloat()
+        var i = 0
+        while (i < count - 2 && x >= c[i + 1]) i++
+        return i + (x - c[i]) / (c[i + 1] - c[i])
+    }
+}

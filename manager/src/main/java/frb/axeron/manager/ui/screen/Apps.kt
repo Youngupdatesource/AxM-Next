@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AppIcon
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -89,6 +90,7 @@ fun AppsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showFab,
+                modifier = Modifier.padding(bottom = LocalCapsuleInset.current),
                 enter = scaleIn(
                     animationSpec = tween(200),
                     initialScale = 0.8f
@@ -142,7 +144,11 @@ fun AppsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                     .padding(paddingValues)
                     .padding(vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = LocalCapsuleInset.current
+                )
             ) {
                 items(
                     appsViewModel.addedList,

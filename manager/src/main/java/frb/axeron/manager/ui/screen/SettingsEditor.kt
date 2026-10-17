@@ -105,6 +105,7 @@ import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.R
 import frb.axeron.manager.data.SettingsRepository
 import frb.axeron.manager.ui.component.ConfirmResult
@@ -324,6 +325,7 @@ fun SettingsEditorScreen(
 
             AnimatedVisibility(
                 visible = showFab && !isSearching && selectedType != null,
+                modifier = Modifier.padding(bottom = LocalCapsuleInset.current),
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it }
             ) {
@@ -476,7 +478,7 @@ fun SettingsEditorScreen(
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 state = listState,
-                                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
+                                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp + LocalCapsuleInset.current)
                             ) {
                                 items(
                                     items = filtered.entries.toList(),
@@ -598,7 +600,7 @@ private fun SearchResults(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
+        contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp + LocalCapsuleInset.current)
     ) {
         items(
             items = hits,
@@ -804,7 +806,7 @@ private fun AllPage(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp)
+                contentPadding = PaddingValues(top = 4.dp, bottom = 16.dp + LocalCapsuleInset.current)
             ) {
                 items(
                     items = hits,
