@@ -89,6 +89,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ActivateScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.QuickShellScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.Axeron
 import frb.axeron.api.AxeronCommandSession
 import frb.axeron.api.AxeronPluginService
@@ -210,7 +211,10 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
             )
         },
         floatingActionButton = {
-            AnimatedVisibility(visible = isRunning) {
+            AnimatedVisibility(
+                visible = isRunning,
+                modifier = Modifier.padding(bottom = LocalCapsuleInset.current)
+            ) {
                 FloatingActionButton(
                     onClick = {
                         navigator.navigate(QuickShellScreenDestination)
@@ -228,7 +232,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(top = 12.dp)
-                .padding(bottom = 120.dp),
+                .padding(bottom = LocalCapsuleInset.current + 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             StatusCard(

@@ -53,6 +53,31 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.layout.onSizeChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.max
+import frb.axeron.manager.ui.screen.HomeScreen
+import frb.axeron.manager.ui.screen.PrivilegeScreen
+import frb.axeron.manager.ui.screen.SettingsScreen
+import frb.axeron.manager.ui.screen.plugin.PluginScreen
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
@@ -256,7 +281,10 @@ class AxActivity : ComponentActivity() {
         val bottomBarRoutes = remember {
             BottomBarDestination.entries.map { it.direction.route }.toSet()
         }
-        val navTransitions = remember(bottomBarRoutes) { createNavTransitions(bottomBarRoutes) }
+        val swipe = remember { TabSwipeState() }
+        val navTransitions = remember(bottomBarRoutes) {
+            createNavTransitions(bottomBarRoutes) { swipe.skipNavTransition }
+        }
 
         // Urutan tab yang sedang tampil di bottom bar (tab needAxeron disembunyikan saat server mati).
         val swipeTabs = BottomBarDestination.entries.filter { axeronInfo.isRunning() || !it.needAxeron }
@@ -290,52 +318,125 @@ class AxActivity : ComponentActivity() {
         val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
         val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+        // Layar tab: konten tembus sampai tepi bawah layar dan kapsul melayang di atasnya
+        // (ruang kapsul dikirim lewat LocalCapsuleInset). Layar lain yang menampilkan kapsul
+        // tetap menyisakan ruang di bawah lewat padding seperti sebelumnya.
+        val floatingTab = currentDestination?.route in bottomBarRoutes
+        val capsuleInset = if (showBottomBar && floatingTab) CapsuleReserve + navInset else 0.dp
+        val reservedBottom = if (showBottomBar && !floatingTab) CapsuleReserve + navInset else 0.dp
+
+        // Geser kiri/kanan antar tab: konten mengikuti jari, tab tetangga ikut terlihat (preview),
+        // lepas jari -> pindah kalau cukup jauh atau cukup cepat, kalau tidak balik ke semula.
+        val swipeScope = rememberCoroutineScope()
+        val density = LocalDensity.current
+        val flingThresholdPx = with(density) { 600.dp.toPx() }
+        val currentRoute = rememberUpdatedState(currentDestination?.route)
+        val nextTab = swipeTabs.getOrNull(currentTabIndex + 1)?.takeIf { currentTabIndex >= 0 }
+        val prevTab = swipeTabs.getOrNull(currentTabIndex - 1)?.takeIf { currentTabIndex >= 0 }
+        val dragNeighbor by remember(swipeTabs, currentTabIndex) {
+            derivedStateOf {
+                val o = swipe.offsetPx
+                when {
+                    currentTabIndex < 0 -> null
+                    o < 0f -> swipeTabs.getOrNull(currentTabIndex + 1)
+                    o > 0f -> swipeTabs.getOrNull(currentTabIndex - 1)
+                    else -> null
+                }
+            }
+        }
+        val previewTab = swipe.hold ?: dragNeighbor
+        val dragState = rememberDraggableState { delta ->
+            swipe.onDrag(delta, hasNext = nextTab != null, hasPrev = prevTab != null)
+        }
+
         Box {
             Scaffold(
                 contentWindowInsets = WindowInsets()
             ) { innerPadding ->
                 CompositionLocalProvider(
                     LocalSnackbarHost provides snackBarHostState,
+                    LocalCapsuleInset provides capsuleInset
                 ) {
-                    DestinationsNavHost(
+                    Box(
                         modifier = Modifier
                             .padding(innerPadding)
-                            .padding(bottom = if (showBottomBar) CapsuleReserve + navInset else 0.dp)
+                            .padding(bottom = reservedBottom)
+                            .then(
+                                if (showBottomBar && floatingTab) {
+                                    // Nav bar sudah ditangani kapsul + LocalCapsuleInset, jadi
+                                    // Scaffold di tiap layar tidak perlu menambah padding bawah lagi.
+                                    Modifier.consumeWindowInsets(
+                                        WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)
+                                    )
+                                } else Modifier
+                            )
+                            .onSizeChanged { swipe.width = it.width.toFloat() }
                             .nestedScroll(capsuleScroll)
-                            // Geser kiri/kanan = pindah ke tab sebelah. Dipasang di parent, jadi
-                            // komponen anak yang sudah memakai drag horizontal (slider, dll) tetap menang.
-                            .pointerInput(showBottomBar, currentTabIndex, swipeTabs) {
-                                if (!showBottomBar || currentTabIndex < 0) return@pointerInput
-                                val threshold = 72.dp.toPx()
-                                var total = 0f
-                                detectHorizontalDragGestures(
-                                    onDragStart = { total = 0f },
-                                    onDragCancel = { total = 0f },
-                                    onDragEnd = {
-                                        val target = when {
-                                            total <= -threshold -> swipeTabs.getOrNull(currentTabIndex + 1)
-                                            total >= threshold -> swipeTabs.getOrNull(currentTabIndex - 1)
-                                            else -> null
+                            // Dipasang di parent, jadi komponen anak yang sudah memakai drag
+                            // horizontal (slider, dll) tetap menang.
+                            .draggable(
+                                state = dragState,
+                                orientation = Orientation.Horizontal,
+                                enabled = showBottomBar && currentTabIndex >= 0,
+                                onDragStarted = { capsule.poke() },
+                                onDragStopped = { velocity ->
+                                    if (!swipe.busy && swipe.offsetPx != 0f) {
+                                        swipe.busy = true
+                                        val goingNext = swipe.offsetPx < 0f
+                                        val target = if (goingNext) nextTab else prevTab
+                                        val targetIndex = if (goingNext) currentTabIndex + 1 else currentTabIndex - 1
+                                        swipeScope.launch {
+                                            swipe.settle(
+                                                velocity = velocity,
+                                                flingThresholdPx = flingThresholdPx,
+                                                target = target,
+                                                targetIndex = targetIndex,
+                                                routeNow = { currentRoute.value },
+                                                navigateTo = { tab ->
+                                                    navigator.navigate(tab.direction) {
+                                                        popUpTo(NavGraphs.root) { saveState = true }
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
+                                                }
+                                            )
                                         }
-                                        total = 0f
-                                        target?.let {
-                                            navigator.navigate(it.direction) {
-                                                popUpTo(NavGraphs.root) { saveState = true }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
+                                    }
+                                }
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = swipe.offsetPx }
+                        ) {
+                            DestinationsNavHost(
+                                navGraph = NavGraphs.root,
+                                navController = navController,
+                                dependenciesContainerBuilder = {
+                                    dependency(viewModelGlobal)
+                                },
+                                defaultTransitions = navTransitions
+                            )
+                        }
+
+                        // Preview tab tetangga: ikut bergeser bersama jari, menempel di sisinya.
+                        previewTab?.let { tab ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        translationX = when {
+                                            swipe.hold != null -> 0f
+                                            swipe.offsetPx < 0f -> swipe.offsetPx + size.width
+                                            else -> swipe.offsetPx - size.width
                                         }
-                                    },
-                                    onHorizontalDrag = { _, dragAmount -> total += dragAmount }
-                                )
-                            },
-                        navGraph = NavGraphs.root,
-                        navController = navController,
-                        dependenciesContainerBuilder = {
-                            dependency(viewModelGlobal)
-                        },
-                        defaultTransitions = navTransitions
-                    )
+                                    }
+                            ) {
+                                TabPreview(tab, navigator, viewModelGlobal)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -350,9 +451,25 @@ class AxActivity : ComponentActivity() {
                     navigator,
                     activateViewModel.axeronInfo,
                     pluginViewModel.pluginUpdateCount,
-                    capsule
+                    capsule,
+                    swipe
                 )
             }
+        }
+    }
+
+    /** Salinan tab tetangga yang hanya hidup selama jari menggeser (atau sesaat saat serah-terima). */
+    @Composable
+    private fun TabPreview(
+        tab: BottomBarDestination,
+        navigator: DestinationsNavigator,
+        viewModelGlobal: ViewModelGlobal
+    ) {
+        when (tab) {
+            BottomBarDestination.Home -> HomeScreen(navigator, viewModelGlobal)
+            BottomBarDestination.Privilege -> PrivilegeScreen(navigator, viewModelGlobal)
+            BottomBarDestination.Plugin -> PluginScreen(navigator, viewModelGlobal)
+            BottomBarDestination.Settings -> SettingsScreen(navigator, viewModelGlobal)
         }
     }
 
@@ -361,12 +478,16 @@ class AxActivity : ComponentActivity() {
      * - pindah antar tab bottom bar: slide horizontal (spring) searah indeks tab
      * - masuk sub-screen: slide dari kanan; kembali: scale-out + fade
      */
-    private fun createNavTransitions(bottomBarRoutes: Set<String>): NavHostAnimatedDestinationStyle {
+    private fun createNavTransitions(
+        bottomBarRoutes: Set<String>,
+        skip: () -> Boolean
+    ): NavHostAnimatedDestinationStyle {
         fun tabIndex(route: String?): Int =
             BottomBarDestination.entries.indexOfFirst { it.direction.route == route }
 
         return object : NavHostAnimatedDestinationStyle() {
-            override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+            override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = enter@{
+                if (skip()) return@enter EnterTransition.None
                 val targetRoute = targetState.destination.route
                 if (targetRoute !in bottomBarRoutes) {
                     slideInHorizontally(initialOffsetX = { it })
@@ -383,7 +504,8 @@ class AxActivity : ComponentActivity() {
                 }
             }
 
-            override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+            override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = exit@{
+                if (skip()) return@exit ExitTransition.None
                 val initialRoute = initialState.destination.route
                 val targetRoute = targetState.destination.route
                 if (initialRoute in bottomBarRoutes && targetRoute !in bottomBarRoutes) {
@@ -403,7 +525,8 @@ class AxActivity : ComponentActivity() {
                 }
             }
 
-            override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
+            override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = popEnter@{
+                if (skip()) return@popEnter EnterTransition.None
                 if (targetState.destination.route in bottomBarRoutes) {
                     slideInHorizontally(initialOffsetX = { -it / 4 }) + fadeIn()
                 } else {
@@ -411,7 +534,8 @@ class AxActivity : ComponentActivity() {
                 }
             }
 
-            override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
+            override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = popExit@{
+                if (skip()) return@popExit ExitTransition.None
                 if (initialState.destination.route !in bottomBarRoutes) {
                     scaleOut(targetScale = 0.9f) + fadeOut()
                 } else {
@@ -427,7 +551,8 @@ class AxActivity : ComponentActivity() {
         navigator: DestinationsNavigator,
         axeronServerInfo: AxeronInfo,
         moduleUpdateCount: Int,
-        capsule: CapsuleState
+        capsule: CapsuleState,
+        swipe: TabSwipeState
     ) {
         val active = capsule.active
         val alpha by animateFloatAsState(
@@ -476,16 +601,27 @@ class AxActivity : ComponentActivity() {
                 }
                 val selectedIndex = selectedStates.indexOfFirst { it.value }
 
-                // Posisi pill = indeks tab (0f..n-1f). Spring: meluncur ke tab baru lalu
-                // overshoot sedikit. Dibaca hanya di fase layout/draw, tanpa recomposition.
-                val pillPosition by animateFloatAsState(
-                    targetValue = selectedIndex.coerceAtLeast(0).toFloat(),
-                    animationSpec = spring(
-                        dampingRatio = 0.72f,
-                        stiffness = Spring.StiffnessMediumLow
-                    ),
-                    label = "capsulePill"
-                )
+                // Posisi pill = indeks tab (0f..n-1f) + progres geser jari. Spring dipakai saat
+                // tab berganti lewat tap; saat digeser pill langsung mengikuti jari. Semua dibaca
+                // di fase layout/draw, tanpa recomposition per frame.
+                LaunchedEffect(selectedIndex) {
+                    if (selectedIndex >= 0) {
+                        swipe.pill.animateTo(
+                            targetValue = selectedIndex.toFloat(),
+                            animationSpec = spring(
+                                dampingRatio = 0.72f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
+                // Ikon yang sedang "di bawah" pill ikut disorot, jadi preview terasa nyambung.
+                val highlighted by remember(selectedIndex) {
+                    derivedStateOf {
+                        if (selectedIndex < 0) -1
+                        else (swipe.pill.value + swipe.progress).roundToInt()
+                    }
+                }
                 val pillAlpha by animateFloatAsState(
                     targetValue = if (selectedIndex >= 0) 1f else 0f,
                     animationSpec = tween(durationMillis = 200),
@@ -500,12 +636,16 @@ class AxActivity : ComponentActivity() {
                     // Indikator terpilih: satu pill yang bergeser di belakang ikon.
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset((pillPosition * stepPx).roundToInt(), 0) }
+                            .offset {
+                                IntOffset(((swipe.pill.value + swipe.progress) * stepPx).roundToInt(), 0)
+                            }
                             .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
                             .graphicsLayer {
                                 // Melar sedikit saat bergerak, kembali normal saat sampai.
-                                val travel = abs(selectedIndex.coerceAtLeast(0) - pillPosition)
-                                scaleX = 1f + 0.16f * travel.coerceAtMost(1f)
+                                val springTravel = abs(swipe.pill.targetValue - swipe.pill.value)
+                                val p = abs(swipe.progress)
+                                val dragStretch = 4f * p * (1f - p) // puncak di tengah, 0 di ujung
+                                scaleX = 1f + 0.16f * max(springTravel.coerceAtMost(1f), dragStretch)
                                 this.alpha = pillAlpha
                             }
                             .background(pillColor, CircleShape)
@@ -517,7 +657,7 @@ class AxActivity : ComponentActivity() {
                         tabs.forEachIndexed { index, destination ->
                             CapsuleItem(
                                 destination = destination,
-                                selected = index == selectedIndex,
+                                selected = index == highlighted,
                                 badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
                                 onClick = {
                                     capsule.poke()
@@ -597,6 +737,84 @@ class AxActivity : ComponentActivity() {
             } else {
                 iconContent()
             }
+        }
+    }
+}
+
+/**
+ * State geser antar tab. [offsetPx] = pergeseran konten (negatif = menuju tab berikutnya),
+ * [pill] = posisi indikator kapsul (indeks tab), [hold] = tab tujuan yang dipertahankan
+ * sebagai preview sesaat sampai NavHost benar-benar menampilkannya.
+ */
+@Stable
+private class TabSwipeState {
+    var offsetPx by mutableFloatStateOf(0f)
+    var width by mutableFloatStateOf(0f)
+    var busy by mutableStateOf(false)
+    var hold by mutableStateOf<BottomBarDestination?>(null)
+    val pill = Animatable(0f)
+
+    /** Dibaca di transisi NavHost; true = pindah tab tanpa animasi (animasinya sudah dari jari). */
+    var skipNavTransition = false
+
+    /** Progres geser -1f..1f (positif = menuju tab berikutnya), dipakai pill. */
+    val progress: Float
+        get() = if (width > 0f) (-offsetPx / width).coerceIn(-1f, 1f) else 0f
+
+    fun onDrag(delta: Float, hasNext: Boolean, hasPrev: Boolean) {
+        if (busy || width <= 0f) return
+        val raw = offsetPx + delta
+        val allowed = if (raw < 0f) hasNext else hasPrev
+        offsetPx = if (allowed) {
+            raw.coerceIn(-width, width)
+        } else {
+            // Tidak ada tab di sisi itu: tahan, hanya menggeser sedikit (efek karet).
+            (offsetPx + delta * 0.25f).coerceIn(-width * 0.12f, width * 0.12f)
+        }
+    }
+
+    suspend fun settle(
+        velocity: Float,
+        flingThresholdPx: Float,
+        target: BottomBarDestination?,
+        targetIndex: Int,
+        routeNow: () -> String?,
+        navigateTo: (BottomBarDestination) -> Unit
+    ) {
+        try {
+            val w = width
+            if (w <= 0f) {
+                offsetPx = 0f
+                return
+            }
+            val toLeft = offsetPx < 0f
+            val farEnough = abs(offsetPx) > w * 0.33f
+            val flung = abs(offsetPx) > 8f && abs(velocity) > flingThresholdPx &&
+                (velocity < 0f) == toLeft
+            val spec = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 420f)
+
+            if (target == null || !(farEnough || flung)) {
+                animate(offsetPx, 0f, velocity, spec) { v, _ -> offsetPx = v }
+                return
+            }
+
+            animate(offsetPx, if (toLeft) -w else w, velocity, spec) { v, _ -> offsetPx = v }
+
+            // Serah-terima: preview tujuan menutupi layar di posisi 0, baru NavHost pindah tab
+            // tanpa animasi, lalu preview dilepas setelah tab asli tampil.
+            hold = target
+            skipNavTransition = true
+            pill.snapTo(targetIndex.toFloat())
+            offsetPx = 0f
+            navigateTo(target)
+            withTimeoutOrNull(1000) {
+                snapshotFlow { routeNow() }.first { it == target.direction.route }
+            }
+            repeat(3) { withFrameNanos { } }
+        } finally {
+            hold = null
+            skipNavTransition = false
+            busy = false
         }
     }
 }

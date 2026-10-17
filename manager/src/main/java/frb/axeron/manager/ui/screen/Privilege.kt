@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AppIcon
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -131,11 +132,9 @@ fun PrivilegeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
-                contentPadding = remember {
-                    PaddingValues(
-                        bottom = 120.dp
-                    )
-                }
+                contentPadding = PaddingValues(
+                    bottom = LocalCapsuleInset.current + 16.dp
+                )
             ) {
                 items(
                     privilegeViewModel.privilegeList,

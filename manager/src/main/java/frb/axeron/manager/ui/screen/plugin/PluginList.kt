@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.AxeronPluginService
 import frb.axeron.manager.AxeronApplication.Companion.axeronApp
 import frb.axeron.manager.R
@@ -223,14 +224,12 @@ fun PluginList(
                 .fillMaxSize()
                 .nestedScroll(TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState()).nestedScrollConnection),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = remember {
-                PaddingValues(
-                    start = 16.dp,
-                    top = 16.dp,
-                    end = 16.dp,
-                    bottom = 120.dp
-                )
-            },
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = 16.dp,
+                end = 16.dp,
+                bottom = LocalCapsuleInset.current + 16.dp
+            ),
         ) {
             when {
                 viewModel.pluginList.isEmpty() -> {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CornerSize
@@ -58,6 +59,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.AxeronPluginService
 import frb.axeron.api.AxeronPluginService.ensureManageExternalStorageAllowed
 import frb.axeron.manager.R
@@ -158,6 +160,7 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
         floatingActionButton = {
             AnimatedVisibility(
                 visible = showFab,
+                modifier = Modifier.padding(bottom = LocalCapsuleInset.current),
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
             ) {
@@ -252,7 +255,11 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
                 }
             }
         },
-        snackbarHost = { AxSnackBarHost(hostState = snackBarHost) }
+        snackbarHost = {
+            Box(modifier = Modifier.padding(bottom = LocalCapsuleInset.current)) {
+                AxSnackBarHost(hostState = snackBarHost)
+            }
+        }
     ) { paddingValues ->
         PluginList(
             navigator = navigator,

@@ -77,6 +77,7 @@ import com.ramcosta.composedestinations.generated.destinations.DeveloperScreenDe
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsEditorScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.adb.util.AdbEnvironment
 import frb.axeron.api.Axeron
 import frb.axeron.manager.R
@@ -145,7 +146,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                 .padding(paddingValues)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .verticalScroll(rememberScrollState())
-                .padding(top = 16.dp, bottom = 32.dp),
+                .padding(top = 16.dp, bottom = LocalCapsuleInset.current + 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
 
