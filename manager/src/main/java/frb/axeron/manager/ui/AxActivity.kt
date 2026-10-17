@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.spring
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.animateColorAsState
@@ -51,6 +53,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +71,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -296,7 +300,7 @@ class AxActivity : ComponentActivity() {
                     DestinationsNavHost(
                         modifier = Modifier
                             .padding(innerPadding)
-                            .padding(bottom = if (showBottomBar) 68.dp + navInset else 0.dp)
+                            .padding(bottom = if (showBottomBar) CapsuleReserve + navInset else 0.dp)
                             .nestedScroll(capsuleScroll)
                             // Geser kiri/kanan = pindah ke tab sebelah. Dipasang di parent, jadi
                             // komponen anak yang sudah memakai drag horizontal (slider, dll) tetap menang.
@@ -448,7 +452,7 @@ class AxActivity : ComponentActivity() {
         Box(
             modifier = Modifier
                 .navigationBarsPadding()
-                .padding(bottom = 8.dp)
+                .padding(bottom = CapsuleGap)
         ) {
             Surface(
                 shape = CircleShape,
@@ -463,40 +467,83 @@ class AxActivity : ComponentActivity() {
                     transformOrigin = TransformOrigin(0.5f, 1f)
                 }
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(6.dp)
-                ) {
-                    BottomBarDestination.entries.forEach { destination ->
-                        if (!axeronServerInfo.isRunning() && destination.needAxeron) return@forEach
+                val tabs = BottomBarDestination.entries.filter {
+                    axeronServerInfo.isRunning() || !it.needAxeron
+                }
+                // key(): state tiap tab tetap stabil saat tab muncul/hilang (server hidup/mati).
+                val selectedStates = tabs.map { tab ->
+                    key(tab) { navController.isRouteOnBackStackAsState(tab.direction) }
+                }
+                val selectedIndex = selectedStates.indexOfFirst { it.value }
 
-                        val selected by navController.isRouteOnBackStackAsState(destination.direction)
-                        CapsuleItem(
-                            destination = destination,
-                            selected = selected,
-                            badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
-                            onClick = {
-                                capsule.poke()
-                                if (selected) {
-                                    navigator.popBackStack(destination.direction, false)
-                                }
-                                navigator.navigate(destination.direction) {
-                                    popUpTo(NavGraphs.root) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                // Posisi pill = indeks tab (0f..n-1f). Spring: meluncur ke tab baru lalu
+                // overshoot sedikit. Dibaca hanya di fase layout/draw, tanpa recomposition.
+                val pillPosition by animateFloatAsState(
+                    targetValue = selectedIndex.coerceAtLeast(0).toFloat(),
+                    animationSpec = spring(
+                        dampingRatio = 0.72f,
+                        stiffness = Spring.StiffnessMediumLow
+                    ),
+                    label = "capsulePill"
+                )
+                val pillAlpha by animateFloatAsState(
+                    targetValue = if (selectedIndex >= 0) 1f else 0f,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "capsulePillAlpha"
+                )
+                val stepPx = with(LocalDensity.current) {
+                    (CapsuleItemWidth + CapsuleItemGap).toPx()
+                }
+                val pillColor = MaterialTheme.colorScheme.primaryContainer
+
+                Box(modifier = Modifier.padding(6.dp)) {
+                    // Indikator terpilih: satu pill yang bergeser di belakang ikon.
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset((pillPosition * stepPx).roundToInt(), 0) }
+                            .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
+                            .graphicsLayer {
+                                // Melar sedikit saat bergerak, kembali normal saat sampai.
+                                val travel = abs(selectedIndex.coerceAtLeast(0) - pillPosition)
+                                scaleX = 1f + 0.16f * travel.coerceAtMost(1f)
+                                this.alpha = pillAlpha
                             }
-                        )
+                            .background(pillColor, CircleShape)
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(CapsuleItemGap)
+                    ) {
+                        tabs.forEachIndexed { index, destination ->
+                            CapsuleItem(
+                                destination = destination,
+                                selected = index == selectedIndex,
+                                badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
+                                onClick = {
+                                    capsule.poke()
+                                    if (index == selectedIndex) {
+                                        navigator.popBackStack(destination.direction, false)
+                                    }
+                                    navigator.navigate(destination.direction) {
+                                        popUpTo(NavGraphs.root) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    /** Fixed-size slot: the selected one only changes colour, so nothing shifts under the finger. */
+    /**
+     * Slot ukuran tetap: ikon tidak pernah berpindah tempat, jadi tap selalu kena sasaran.
+     * Latar terpilih digambar oleh pill yang bergeser di BottomBar, bukan di sini.
+     */
     @Composable
     private fun CapsuleItem(
         destination: BottomBarDestination,
@@ -505,33 +552,50 @@ class AxActivity : ComponentActivity() {
         onClick: () -> Unit
     ) {
         val label = stringResource(id = destination.labelId)
-        val container by animateColorAsState(
-            targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-            animationSpec = tween(durationMillis = 250),
-            label = "capsuleItemBg"
-        )
         val tint by animateColorAsState(
             targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
             else MaterialTheme.colorScheme.onSurfaceVariant,
             animationSpec = tween(durationMillis = 250),
             label = "capsuleItemTint"
         )
-        val icon = if (selected) destination.iconSelected else destination.iconNotSelected
+        // "Pop" kecil pada ikon yang baru dipilih; area sentuh tidak berubah.
+        val pop by animateFloatAsState(
+            targetValue = if (selected) 1.12f else 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            label = "capsuleItemPop"
+        )
 
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(width = 60.dp, height = 48.dp)
+                .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
                 .clip(CircleShape)
-                .background(container)
                 .clickable(onClick = onClick)
         ) {
-            if (badgeCount > 0) {
-                BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) {
-                    Icon(icon, contentDescription = label, tint = tint)
+            val iconContent: @Composable () -> Unit = {
+                Crossfade(
+                    targetState = selected,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "capsuleItemIcon"
+                ) { isSelected ->
+                    Icon(
+                        imageVector = if (isSelected) destination.iconSelected else destination.iconNotSelected,
+                        contentDescription = label,
+                        tint = tint,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = pop
+                            scaleY = pop
+                        }
+                    )
                 }
+            }
+            if (badgeCount > 0) {
+                BadgedBox(badge = { Badge { Text(badgeCount.toString()) } }) { iconContent() }
             } else {
-                Icon(icon, contentDescription = label, tint = tint)
+                iconContent()
             }
         }
     }
@@ -554,3 +618,11 @@ private class CapsuleState {
         active = false
     }
 }
+
+// Ukuran & posisi kapsul nav. CapsuleGap = jarak kapsul dari tepi bawah (di atas nav bar sistem)
+// supaya benar-benar melayang; CapsuleReserve = ruang yang disisakan untuk konten di bawahnya.
+private val CapsuleItemWidth = 60.dp
+private val CapsuleItemHeight = 48.dp
+private val CapsuleItemGap = 4.dp
+private val CapsuleGap = 24.dp
+private val CapsuleReserve = CapsuleItemHeight + 12.dp + CapsuleGap
