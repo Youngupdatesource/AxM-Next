@@ -112,3 +112,20 @@ fun insetTextFieldColors(): TextFieldColors {
         errorContainerColor = container
     )
 }
+
+/**
+ * Warna badan kapsul nav. Di tema gelap dibuat lebih gelap dari kartu (kali 0,78 per kanal),
+ * jadi kapsul tidak menyatu dengan kartu di belakangnya: kartu #24252E -> kapsul #1C1D24, setara
+ * kapsul KernelSU, dan tetap mengikuti palet dinamis karena diturunkan dari [cardContainerColor].
+ * Tema terang tetap memakai surfaceContainerHighest.
+ */
+@Composable
+fun capsuleContainerColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.background.luminance() < 0.5f) {
+        val card = cardContainerColor()
+        Color(red = card.red * 0.78f, green = card.green * 0.78f, blue = card.blue * 0.78f, alpha = 1f)
+    } else {
+        scheme.surfaceContainerHighest
+    }
+}

@@ -150,6 +150,7 @@ import frb.axeron.manager.R
 import frb.axeron.manager.ui.navigation.BottomBarDestination
 import frb.axeron.manager.ui.screen.FlashIt
 import frb.axeron.manager.ui.theme.AxManagerTheme
+import frb.axeron.manager.ui.theme.capsuleContainerColor
 import frb.axeron.manager.ui.util.LocalSnackbarHost
 import frb.axeron.manager.ui.util.LocaleHelper
 import frb.axeron.manager.ui.viewmodel.ActivateViewModel
@@ -591,7 +592,7 @@ class AxActivity : ComponentActivity() {
         ) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = fade),
+                color = capsuleContainerColor().copy(alpha = fade),
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 shadowElevation = CapsuleShadow
             ) {
@@ -765,7 +766,10 @@ class AxActivity : ComponentActivity() {
                                 label = labels[index],
                                 selected = index == highlighted,
                                 badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
-                                selectedAlpha = { lerp(CapsuleIdleContentAlpha, 1f, activeAmount) },
+                                contentAlpha = { isSelected ->
+                                    if (isSelected) lerp(CapsuleIdleContentAlpha, CapsuleSelectedAlpha, activeAmount)
+                                    else lerp(CapsuleIdleIconAlpha, CapsuleIconAlpha, activeAmount)
+                                },
                                 widthPx = {
                                     val p = if (selectedIndex < 0) -10f else swipe.position(maxIdx)
                                     metrics.width(index, p).roundToInt()
@@ -803,7 +807,7 @@ class AxActivity : ComponentActivity() {
         label: String,
         selected: Boolean,
         badgeCount: Int,
-        selectedAlpha: () -> Float,
+        contentAlpha: (selected: Boolean) -> Float,
         widthPx: () -> Int,
         expansion: () -> Float,
         onClick: () -> Unit
@@ -852,8 +856,8 @@ class AxActivity : ComponentActivity() {
                             modifier = Modifier.graphicsLayer {
                                 scaleX = pop
                                 scaleY = pop
-                                // Ikon tab terpilih ikut meredup saat kapsul idle.
-                                alpha = if (isSelected) selectedAlpha() else 1f
+                                // Ikon diredupkan sedikit (lebih kuat saat kapsul idle) supaya tidak terlalu kontras.
+                                alpha = contentAlpha(isSelected)
                             }
                         )
                     }
@@ -876,7 +880,7 @@ class AxActivity : ComponentActivity() {
                     .wrapContentWidth(Alignment.Start, unbounded = true)
                     .graphicsLayer {
                         val e = expansion()
-                        alpha = e * selectedAlpha()
+                        alpha = e * contentAlpha(true)
                         translationX = -(1f - e) * slidePx
                     }
             )
@@ -1032,9 +1036,13 @@ private val CapsuleLabelMax = 96.dp
 private val CapsuleGap = 24.dp
 private val CapsuleShadow = 10.dp
 
-// Saat kapsul idle: seberapa terlihat pill terpilih / ikon + label terpilih (1f = tidak meredup).
+// Keterlihatan isi kapsul (1f = tidak diredupkan). Aktif: ikon biasa 0,75, ikon + label terpilih 0,92.
+// Idle: pill terpilih 0,45, ikon + label terpilih 0,7, ikon biasa 0,6.
 private const val CapsuleIdlePillAlpha = 0.45f
 private const val CapsuleIdleContentAlpha = 0.7f
+private const val CapsuleIdleIconAlpha = 0.6f
+private const val CapsuleSelectedAlpha = 0.92f
+private const val CapsuleIconAlpha = 0.75f
 private val CapsuleReserve = CapsuleItemHeight + 12.dp + CapsuleGap
 
 /**
