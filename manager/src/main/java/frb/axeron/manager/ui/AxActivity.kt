@@ -576,6 +576,13 @@ class AxActivity : ComponentActivity() {
             animationSpec = tween(durationMillis = 350),
             label = "capsuleFade"
         )
+        // 1f = aktif, 0f = idle. Area tab terpilih (pill + ikon + label) meredup lebih kuat
+        // daripada badan kapsul, supaya tidak terlalu kontras saat tidak ada interaksi.
+        val activeAmount by animateFloatAsState(
+            targetValue = if (capsule.active) 1f else 0f,
+            animationSpec = tween(durationMillis = 350),
+            label = "capsuleActiveAmount"
+        )
 
         Box(
             modifier = Modifier
@@ -748,7 +755,7 @@ class AxActivity : ComponentActivity() {
                                 topLeft = Offset(cx - w / 2f, (size.height - h) / 2f),
                                 size = Size(w, h),
                                 cornerRadius = CornerRadius(h / 2f, h / 2f),
-                                alpha = pillAlpha
+                                alpha = pillAlpha * lerp(CapsuleIdlePillAlpha, 1f, activeAmount)
                             )
                         }
                     ) {
@@ -758,6 +765,7 @@ class AxActivity : ComponentActivity() {
                                 label = labels[index],
                                 selected = index == highlighted,
                                 badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
+                                selectedAlpha = { lerp(CapsuleIdleContentAlpha, 1f, activeAmount) },
                                 widthPx = {
                                     val p = if (selectedIndex < 0) -10f else swipe.position(maxIdx)
                                     metrics.width(index, p).roundToInt()
@@ -795,6 +803,7 @@ class AxActivity : ComponentActivity() {
         label: String,
         selected: Boolean,
         badgeCount: Int,
+        selectedAlpha: () -> Float,
         widthPx: () -> Int,
         expansion: () -> Float,
         onClick: () -> Unit
@@ -843,6 +852,8 @@ class AxActivity : ComponentActivity() {
                             modifier = Modifier.graphicsLayer {
                                 scaleX = pop
                                 scaleY = pop
+                                // Ikon tab terpilih ikut meredup saat kapsul idle.
+                                alpha = if (isSelected) selectedAlpha() else 1f
                             }
                         )
                     }
@@ -865,7 +876,7 @@ class AxActivity : ComponentActivity() {
                     .wrapContentWidth(Alignment.Start, unbounded = true)
                     .graphicsLayer {
                         val e = expansion()
-                        alpha = e
+                        alpha = e * selectedAlpha()
                         translationX = -(1f - e) * slidePx
                     }
             )
@@ -1020,6 +1031,10 @@ private val CapsuleLabelGap = 8.dp
 private val CapsuleLabelMax = 96.dp
 private val CapsuleGap = 24.dp
 private val CapsuleShadow = 10.dp
+
+// Saat kapsul idle: seberapa terlihat pill terpilih / ikon + label terpilih (1f = tidak meredup).
+private const val CapsuleIdlePillAlpha = 0.45f
+private const val CapsuleIdleContentAlpha = 0.7f
 private val CapsuleReserve = CapsuleItemHeight + 12.dp + CapsuleGap
 
 /**
