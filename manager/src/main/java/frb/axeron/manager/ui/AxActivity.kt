@@ -70,6 +70,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.layout.onSizeChanged
 import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
@@ -378,14 +384,16 @@ class AxActivity : ComponentActivity() {
                                 state = dragState,
                                 orientation = Orientation.Horizontal,
                                 enabled = showBottomBar && currentTabIndex >= 0,
-                                onDragStarted = { capsule.poke() },
+                                onDragStarted = {
+                                    swipe.beginDrag()
+                                    capsule.poke()
+                                },
                                 onDragStopped = { velocity ->
-                                    if (!swipe.busy && swipe.offsetPx != 0f) {
-                                        swipe.busy = true
+                                    if (!swipe.handingOff && swipe.offsetPx != 0f) {
                                         val goingNext = swipe.offsetPx < 0f
                                         val target = if (goingNext) nextTab else prevTab
                                         val targetIndex = if (goingNext) currentTabIndex + 1 else currentTabIndex - 1
-                                        swipeScope.launch {
+                                        swipe.job = swipeScope.launch {
                                             swipe.settle(
                                                 velocity = velocity,
                                                 flingThresholdPx = flingThresholdPx,
@@ -618,10 +626,34 @@ class AxActivity : ComponentActivity() {
                 // Ikon yang sedang "di bawah" pill ikut disorot, jadi preview terasa nyambung.
                 val highlighted by remember(selectedIndex) {
                     derivedStateOf {
-                        if (selectedIndex < 0) -1
-                        else (swipe.pill.value + swipe.progress).roundToInt()
+                        when {
+                            selectedIndex < 0 -> -1
+                            swipe.scrubbing -> swipe.scrubPos.roundToInt()
+                            else -> (swipe.pill.value + swipe.progress).roundToInt()
+                        }
                     }
                 }
+                val goTo: (BottomBarDestination) -> Unit = { destination ->
+                    navigator.navigate(destination.direction) {
+                        popUpTo(NavGraphs.root) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+                val scope = rememberCoroutineScope()
+                val haptic = LocalHapticFeedback.current
+                val tabsNow = rememberUpdatedState(tabs)
+                val selectedNow = rememberUpdatedState(selectedIndex)
+                val grabScale by animateFloatAsState(
+                    targetValue = if (swipe.scrubbing) 1.12f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "capsuleGrab"
+                )
                 val pillAlpha by animateFloatAsState(
                     targetValue = if (selectedIndex >= 0) 1f else 0f,
                     animationSpec = tween(durationMillis = 200),
@@ -630,14 +662,76 @@ class AxActivity : ComponentActivity() {
                 val stepPx = with(LocalDensity.current) {
                     (CapsuleItemWidth + CapsuleItemGap).toPx()
                 }
+                val itemWidthPx = with(LocalDensity.current) { CapsuleItemWidth.toPx() }
                 val pillColor = MaterialTheme.colorScheme.primaryContainer
+                // Posisi jari -> indeks pill kontinu (pill berpusat di bawah jari).
+                val scrubIndexAt: (Float) -> Float = { x ->
+                    ((x - itemWidthPx / 2f) / stepPx)
+                        .coerceIn(0f, (tabsNow.value.size - 1).coerceAtLeast(0).toFloat())
+                }
 
-                Box(modifier = Modifier.padding(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .padding(6.dp)
+                        // Tahan lalu geser: pill ikut jari, lepas = pindah ke tab di bawahnya.
+                        // Tap biasa tetap ditangani CapsuleItem (long-press membatalkan klik).
+                        .pointerInput(stepPx, itemWidthPx) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset ->
+                                    swipe.job?.cancel()
+                                    swipe.scrubPos = scrubIndexAt(offset.x)
+                                    swipe.scrubbing = true
+                                    capsule.poke()
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    swipe.scrubPos = scrubIndexAt(change.position.x)
+                                },
+                                onDragEnd = {
+                                    val list = tabsNow.value
+                                    val from = swipe.scrubPos
+                                    val idx = from.roundToInt().coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                                    scope.launch {
+                                        // Lanjut dari posisi jari tanpa lompat, lalu mendarat di tab tujuan.
+                                        swipe.pill.snapTo(from)
+                                        swipe.scrubbing = false
+                                        list.getOrNull(idx)?.let { dest ->
+                                            if (idx != selectedNow.value) goTo(dest)
+                                            swipe.pill.animateTo(
+                                                targetValue = idx.toFloat(),
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.72f,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    val back = selectedNow.value.coerceAtLeast(0).toFloat()
+                                    scope.launch {
+                                        swipe.pill.snapTo(swipe.scrubPos)
+                                        swipe.scrubbing = false
+                                        swipe.pill.animateTo(
+                                            targetValue = back,
+                                            animationSpec = spring(
+                                                dampingRatio = 0.72f,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                ) {
                     // Indikator terpilih: satu pill yang bergeser di belakang ikon.
                     Box(
                         modifier = Modifier
                             .offset {
-                                IntOffset(((swipe.pill.value + swipe.progress) * stepPx).roundToInt(), 0)
+                                val pos = if (swipe.scrubbing) swipe.scrubPos
+                                else swipe.pill.value + swipe.progress
+                                IntOffset((pos * stepPx).roundToInt(), 0)
                             }
                             .size(width = CapsuleItemWidth, height = CapsuleItemHeight)
                             .graphicsLayer {
@@ -645,7 +739,8 @@ class AxActivity : ComponentActivity() {
                                 val springTravel = abs(swipe.pill.targetValue - swipe.pill.value)
                                 val p = abs(swipe.progress)
                                 val dragStretch = 4f * p * (1f - p) // puncak di tengah, 0 di ujung
-                                scaleX = 1f + 0.16f * max(springTravel.coerceAtMost(1f), dragStretch)
+                                scaleX = (1f + 0.16f * max(springTravel.coerceAtMost(1f), dragStretch)) * grabScale
+                                scaleY = grabScale
                                 this.alpha = pillAlpha
                             }
                             .background(pillColor, CircleShape)
@@ -660,16 +755,13 @@ class AxActivity : ComponentActivity() {
                                 selected = index == highlighted,
                                 badgeCount = if (destination == BottomBarDestination.Plugin) moduleUpdateCount else 0,
                                 onClick = {
-                                    capsule.poke()
-                                    if (index == selectedIndex) {
-                                        navigator.popBackStack(destination.direction, false)
-                                    }
-                                    navigator.navigate(destination.direction) {
-                                        popUpTo(NavGraphs.root) {
-                                            saveState = true
+                                    // Klik yang menyusul setelah hold-geser tidak boleh ikut dieksekusi.
+                                    if (!swipe.scrubbing) {
+                                        capsule.poke()
+                                        if (index == selectedIndex) {
+                                            navigator.popBackStack(destination.direction, false)
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                        goTo(destination)
                                     }
                                 }
                             )
@@ -750,19 +842,35 @@ class AxActivity : ComponentActivity() {
 private class TabSwipeState {
     var offsetPx by mutableFloatStateOf(0f)
     var width by mutableFloatStateOf(0f)
-    var busy by mutableStateOf(false)
     var hold by mutableStateOf<BottomBarDestination?>(null)
     val pill = Animatable(0f)
 
+    /** Animasi lepas-jari sedang jalan; boleh disela jari berikutnya kapan saja. */
+    var settling by mutableStateOf(false)
+
+    /** Serah-terima ke tab asli (beberapa frame saja); satu-satunya fase yang tidak bisa disela. */
+    var handingOff = false
+    var job: Job? = null
+    private var generation = 0
+
     /** Dibaca di transisi NavHost; true = pindah tab tanpa animasi (animasinya sudah dari jari). */
     var skipNavTransition = false
+
+    /** Hold-lalu-geser pada kapsul: pill mengikuti jari, lepas = buka tab yang dituju. */
+    var scrubbing by mutableStateOf(false)
+    var scrubPos by mutableFloatStateOf(0f)
 
     /** Progres geser -1f..1f (positif = menuju tab berikutnya), dipakai pill. */
     val progress: Float
         get() = if (width > 0f) (-offsetPx / width).coerceIn(-1f, 1f) else 0f
 
+    /** Jari baru menyentuh saat animasi sebelumnya belum selesai: batalkan, lanjut dari posisi sekarang. */
+    fun beginDrag() {
+        if (!handingOff) job?.cancel()
+    }
+
     fun onDrag(delta: Float, hasNext: Boolean, hasPrev: Boolean) {
-        if (busy || width <= 0f) return
+        if (handingOff || width <= 0f) return
         val raw = offsetPx + delta
         val allowed = if (raw < 0f) hasNext else hasPrev
         offsetPx = if (allowed) {
@@ -781,6 +889,8 @@ private class TabSwipeState {
         routeNow: () -> String?,
         navigateTo: (BottomBarDestination) -> Unit
     ) {
+        val mine = ++generation
+        settling = true
         try {
             val w = width
             if (w <= 0f) {
@@ -791,30 +901,45 @@ private class TabSwipeState {
             val farEnough = abs(offsetPx) > w * 0.33f
             val flung = abs(offsetPx) > 8f && abs(velocity) > flingThresholdPx &&
                 (velocity < 0f) == toLeft
-            val spec = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 420f)
+            // visibilityThreshold dalam px: tanpa ini spring Float baru "selesai" di 0,01 px,
+            // ekor animasi yang tak terlihat itu yang bikin pindah tab terasa menunggu.
+            val spec = spring<Float>(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = 800f,
+                visibilityThreshold = 1f
+            )
 
             if (target == null || !(farEnough || flung)) {
                 animate(offsetPx, 0f, velocity, spec) { v, _ -> offsetPx = v }
+                offsetPx = 0f
                 return
             }
 
             animate(offsetPx, if (toLeft) -w else w, velocity, spec) { v, _ -> offsetPx = v }
 
-            // Serah-terima: preview tujuan menutupi layar di posisi 0, baru NavHost pindah tab
-            // tanpa animasi, lalu preview dilepas setelah tab asli tampil.
-            hold = target
-            skipNavTransition = true
-            pill.snapTo(targetIndex.toFloat())
-            offsetPx = 0f
-            navigateTo(target)
-            withTimeoutOrNull(1000) {
-                snapshotFlow { routeNow() }.first { it == target.direction.route }
+            // Serah-terima (tidak bisa dibatalkan): preview tujuan menutupi layar di posisi 0,
+            // NavHost pindah tab tanpa animasi, preview dilepas setelah tab asli tampil.
+            withContext(NonCancellable) {
+                handingOff = true
+                try {
+                    settling = false
+                    hold = target
+                    skipNavTransition = true
+                    pill.snapTo(targetIndex.toFloat())
+                    offsetPx = 0f
+                    navigateTo(target)
+                    withTimeoutOrNull(400) {
+                        snapshotFlow { routeNow() }.first { it == target.direction.route }
+                    }
+                    repeat(2) { withFrameNanos { } }
+                } finally {
+                    hold = null
+                    skipNavTransition = false
+                    handingOff = false
+                }
             }
-            repeat(3) { withFrameNanos { } }
         } finally {
-            hold = null
-            skipNavTransition = false
-            busy = false
+            if (generation == mine) settling = false
         }
     }
 }

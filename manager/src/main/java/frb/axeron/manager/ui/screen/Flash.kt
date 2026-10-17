@@ -74,6 +74,7 @@ import com.fox2code.androidansi.ktx.parseAsAnsiAnnotatedString
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.api.Axeron
 import frb.axeron.api.AxeronCommandSession
 import frb.axeron.api.AxeronPluginService
@@ -231,7 +232,7 @@ fun InstallDialog(
                                 }
 
                                 // SWITCH
-                                Switch(
+                                AxSwitch(
                                     checked = pluginInstaller.autoEnable,
                                     onCheckedChange = { checked ->
                                         installers[index] =

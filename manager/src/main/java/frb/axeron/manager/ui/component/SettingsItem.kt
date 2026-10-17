@@ -157,7 +157,7 @@ fun SettingsItem(
                         )
                     }
                     Spacer(Modifier.width(12.dp))
-                    Switch(
+                    AxSwitch(
                         enabled = enabled,
                         checked = checked,
                         onCheckedChange = onSwitchChange

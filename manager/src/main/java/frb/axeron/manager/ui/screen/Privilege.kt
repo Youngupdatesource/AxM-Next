@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AppIcon
 import com.ramcosta.composedestinations.annotation.Destination
@@ -166,7 +167,7 @@ fun PrivilegeScreen(
 )
                         },
                         trailingContent = {
-                            Switch(
+                            AxSwitch(
                                 checked = app.isAdded,
                                 onCheckedChange = { checked ->
                                     if (checked) {

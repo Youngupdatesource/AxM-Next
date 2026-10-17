@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +66,7 @@ import frb.axeron.manager.ui.component.PaletteDialog
 import frb.axeron.manager.ui.component.SettingsItem
 import frb.axeron.manager.ui.component.rememberCustomDialog
 import frb.axeron.manager.ui.theme.hexToColor
+import frb.axeron.manager.ui.util.AppearancePrefs
 import frb.axeron.manager.ui.util.LocalSnackbarHost
 import frb.axeron.manager.ui.util.LocaleHelper
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
@@ -312,6 +314,16 @@ fun AppearanceScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     }
                 }
             }
+
+            SettingsItem(
+                iconVector = Icons.Filled.ToggleOn,
+                label = stringResource(R.string.switch_icon),
+                description = stringResource(R.string.switch_icon_desc),
+                checked = AppearancePrefs.switchIcon,
+                onSwitchChange = {
+                    AppearancePrefs.switchIcon = it
+                }
+            )
 
             SettingsItem(
                 iconVector = Icons.Filled.Palette,

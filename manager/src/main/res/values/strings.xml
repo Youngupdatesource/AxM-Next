@@ -95,6 +95,8 @@
     <string name="settings_language">Language Settings</string>
     <string name="auto_theme">Auto Theme</string>
     <string name="auto_theme_desc">Select theme automatically</string>
+    <string name="switch_icon">Switch icon</string>
+    <string name="switch_icon_desc">Show ✓ and ✕ icons on switches</string>
     <string name="dynamic_color">Dynamic Color</string>
     <string name="dynamic_color_desc">Select colors dynamically</string>
     <string name="color_palette">Color Palette</string>

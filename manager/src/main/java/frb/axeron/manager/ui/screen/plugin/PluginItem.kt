@@ -61,6 +61,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.ramcosta.composedestinations.generated.destinations.ExecutePluginActionScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.api.Axeron
 import frb.axeron.api.AxeronPluginService
 import frb.axeron.manager.R
@@ -609,7 +610,7 @@ fun PluginItem(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            Switch(
+                            AxSwitch(
                                 enabled = (if (plugin.enabled) !plugin.updateDisable else !plugin.updateEnable) && !plugin.remove && !plugin.updateInstall,
                                 checked = plugin.enabled && !plugin.remove,
                                 onCheckedChange = onCheckChanged,
