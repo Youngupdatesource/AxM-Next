@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,7 +101,8 @@ fun CachedBannerImage(
                 contentScale = ContentScale.Crop
             )
         } else null
-        val success = painter?.let { it.state.collectAsState().value } as? AsyncImagePainter.State.Success
+        // Coil 2.x: painter.state is a Compose-observable value (not a StateFlow).
+        val success = painter?.state as? AsyncImagePainter.State.Success
 
         LaunchedEffect(success) {
             if (success != null && BannerFrameCache.frame(cacheKey) == null) {
