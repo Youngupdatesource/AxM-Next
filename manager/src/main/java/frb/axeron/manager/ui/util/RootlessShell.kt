@@ -1,16 +1,20 @@
 package frb.axeron.manager.ui.util
 
+import java.io.File
+
 /**
  * "Rootless debugging": lowers a QuickShell command from root to the shell user (uid 2000), so
  * it behaves like `adb shell` while the Axeron server itself keeps running as root.
  *
- * Built on toybox `setpriv` (a single exec, no extra process left behind):
- *  - uid/gid and supplementary groups become adbd's shell identity;
- *  - the capability bounding set and inheritable caps are emptied, and `no_new_privs` stops it
- *    from getting anything back through setuid binaries;
- *  - the SELinux domain is switched to u:r:shell:s0 with `runcon` when the system allows it.
+ * Why not plain `setpriv`: on rooted phones `setpriv` is usually BusyBox's (or toybox's), and
+ * both only handle capabilities, they cannot change uid. So the work is done by `libaxdrop.so`,
+ * a tiny native helper shipped with the app (one exec, nothing left running behind):
+ *  - capability bounding set emptied, then shell uid/gid and supplementary groups;
+ *  - SELinux domain u:r:shell:s0 for the exec, dropped again if the policy refuses it;
+ *  - ambient caps cleared.
+ * A util-linux style `setpriv` (one that accepts --reuid) is only used as a fallback.
  *
- * If `setpriv` is missing the command is NOT run: silently staying root would defeat the point.
+ * If neither works the command is NOT run: silently staying root would defeat the point.
  */
 object RootlessShell {
 
@@ -22,18 +26,25 @@ object RootlessShell {
         "2000,1004,1007,1011,1015,1028,1009,3001,3002,3003,3006,3009,1002,1018,1078,1079,3012,1003"
 
     private const val SHELL_CONTEXT = "u:r:shell:s0"
+    private const val SHELL = "/system/bin/sh"
+
+    /** Where the app's extracted native executables live (same place libaxeron.so runs from). */
+    fun helperPath(nativeLibraryDir: String): String = File(nativeLibraryDir, "libaxdrop.so").path
 
     /** Wraps [command] so it runs as the shell user. Output and stdin stay attached (exec). */
-    fun wrap(command: String): String {
-        val quoted = "'" + command.replace("'", "'\\''") + "'"
+    fun wrap(command: String, helper: String): String {
+        val quoted = shQuote(command)
         return buildString {
-            append("RC=''; ")
-            append("command -v runcon >/dev/null 2>&1 && runcon $SHELL_CONTEXT true >/dev/null 2>&1 ")
-            append("&& RC=\"runcon $SHELL_CONTEXT\"; ")
-            append("if command -v setpriv >/dev/null 2>&1; then ")
-            append("exec \$RC setpriv --reuid=$SHELL_UID --regid=$SHELL_UID --groups=$SHELL_GROUPS ")
-            append("--bounding-set=-all --inh-caps=-all --no-new-privs sh -c $quoted; ")
-            append("else echo 'rootless: setpriv not found, command not run' >&2; exit 127; fi")
+            append("D=${shQuote(helper)}; ")
+            // 1) our helper
+            append("if [ -x \"\$D\" ]; then exec \"\$D\" -c $SHELL_CONTEXT -G $SHELL_GROUPS -- $SHELL -c $quoted; fi; ")
+            // 2) a setpriv that can really change uid (util-linux style); BusyBox's cannot
+            append("if setpriv --reuid=$SHELL_UID --regid=$SHELL_UID --clear-groups $SHELL -c : >/dev/null 2>&1; then ")
+            append("exec setpriv --reuid=$SHELL_UID --regid=$SHELL_UID --groups=$SHELL_GROUPS ")
+            append("--bounding-set=-all --inh-caps=-all $SHELL -c $quoted; fi; ")
+            append("echo 'rootless: no way to drop to the shell user (libaxdrop.so missing), command not run' >&2; exit 127")
         }
     }
+
+    private fun shQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

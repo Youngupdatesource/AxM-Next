@@ -316,5 +316,5 @@
     <string name="otg_scan">Scan again</string>
     <string name="otg_activate">Activate</string>
     <string name="rootless_debugging">Rootless debugging</string>
-    <string name="rootless_debugging_desc">Run QuickShell commands at the shell level (uid 2000, like adb shell) instead of root. Uses setpriv; if it is missing the command is not run. Only available in root mode.</string>
+    <string name="rootless_debugging_desc">Run QuickShell commands at the shell level (uid 2000, like adb shell) instead of root. Uses a small bundled helper (libaxdrop.so); if it cannot run, the command is not run. Only available in root mode.</string>
 </resources>

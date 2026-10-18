@@ -182,7 +182,12 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
 
         // While a process runs, the input is its stdin: never wrap that.
         val lowered = !isRunning && isRootlessEnabled && isRootMode
-        val toRun = if (lowered) RootlessShell.wrap(cmd) else cmd
+        val toRun = if (lowered) {
+            RootlessShell.wrap(
+                cmd,
+                RootlessShell.helperPath(getApplication<Application>().applicationInfo.nativeLibraryDir)
+            )
+        } else cmd
         if (lowered) {
             displayCommand = cmd
             wrappedCommand = toRun

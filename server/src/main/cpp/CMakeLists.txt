@@ -26,3 +26,11 @@ if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_custom_command(TARGET libaxeron.so POST_BUILD
             COMMAND ${CMAKE_STRIP} --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libaxeron.so")
 endif()
+
+# Drops root to the adb shell user for QuickShell's "Rootless debugging" (plain libc, no extras).
+add_executable(libaxdrop.so axdrop.cpp)
+
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_custom_command(TARGET libaxdrop.so POST_BUILD
+            COMMAND ${CMAKE_STRIP} --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libaxdrop.so")
+endif()

@@ -316,5 +316,5 @@
     <string name="otg_scan">Pindai ulang</string>
     <string name="otg_activate">Aktifkan</string>
     <string name="rootless_debugging">Rootless debugging</string>
-    <string name="rootless_debugging_desc">Jalankan perintah QuickShell di level Shell (uid 2000, seperti adb shell), bukan root. Memakai setpriv; kalau tidak tersedia perintah tidak dijalankan. Hanya tersedia di mode root.</string>
+    <string name="rootless_debugging_desc">Jalankan perintah QuickShell di level Shell (uid 2000, seperti adb shell), bukan root. Memakai helper kecil bawaan aplikasi (libaxdrop.so); kalau tidak bisa jalan, perintah tidak dijalankan. Hanya tersedia di mode root.</string>
 </resources>
