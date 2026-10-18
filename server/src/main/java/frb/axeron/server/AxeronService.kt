@@ -361,6 +361,59 @@ open class AxeronService :
         WakeLockMode.NEVER
     }
 
+    /**
+     * Flag file for the death watchdog below: present, every plugin's processes are stopped when
+     * the server stops. Absent (the default), plugins keep running on their own. Read at the
+     * moment the server dies, so it can be switched without restarting the server. Like
+     * ax_wakelock_mode, it is a file in the working dir, not a setting.
+     */
+    private val stopPluginsFlagFile =
+        File(
+            PathHelper.getWorkingPath(isRoot, AxeronApiConstant.folder.PARENT),
+            "ax_stop_plugins_with_server"
+        )
+
+    /**
+     * Waits on a pipe whose write end only this server holds and never writes to. When the
+     * server dies for any reason (exit(), a crash, SIGKILL, replaced by a new server) the kernel
+     * closes it, the watchdog's read returns, and if the flag file ([stopPluginsFlagFile]) is
+     * there at that moment it stops every plugin's processes through the igniter. Kept in a
+     * field: a collected Process closes the pipe, which would fire the watchdog while the
+     * server is still running. Declared before init: init starts it.
+     */
+    private var deathWatchdog: Process? = null
+
+    private fun startDeathWatchdog() {
+        // The igniter's dex, put in the bin dir at activation (functions.sh runs it from there).
+        val dex = File(
+            PathHelper.getWorkingPath(isRoot, AxeronApiConstant.folder.PARENT_BINARY),
+            "ax_reignite.dex"
+        )
+        val script = $$"""
+            read -r _
+            [ -f "$1" ] && [ -f "$2" ] || exit 0
+            CLASSPATH="$2" exec /system/bin/app_process / frb.axeron.reignite.Igniter --stop-all
+        """.trimIndent()
+
+        try {
+            deathWatchdog = ProcessBuilder(
+                "/system/bin/sh", "-c", script, "axeron_watchdog",
+                stopPluginsFlagFile.absolutePath, dex.absolutePath
+            )
+                .apply {
+                    // The server's env (AXERONDIR, AXERONXBIN for the igniter), without a plugin
+                    // marker (see getMergedEnvironment).
+                    environment().clear()
+                    environment().putAll(getEnvironment(TYPE_ENV).envMap)
+                }
+                .redirectErrorStream(true)
+                .redirectOutput(File("/dev/null"))
+                .start()
+        } catch (e: Throwable) {
+            LOGGER.w(e, "start death watchdog")
+        }
+    }
+
     init {
 
         HandlerUtil.setMainHandler(mainHandler)
@@ -407,6 +460,8 @@ open class AxeronService :
         }
 
         DaemonGuard.start(MANAGER_APPLICATION_ID)
+
+        startDeathWatchdog()
     }
 
     fun sendBinderToClient() {
@@ -451,7 +506,9 @@ open class AxeronService :
         // avoid extra temporary HashMap allocations — rely on Builder to copy if needed
         val merged = Environment.Builder(true)
             .putAll(getDefaultEnvironment().envMap) // prefer to pass the map directly
-            .putAll(environmentManager.getAll())    // avoid new HashMap(...)
+            // A plugin's process marker set in the user's env would tag every process as that
+            // plugin's, so stopping it would stop them all. Only plugin code gets it.
+            .putAll(environmentManager.getAll().filterKeys { it != "AXERON_PLUGIN" })
             .build()
 
         cachedMergedEnv = merged

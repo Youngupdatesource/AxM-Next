@@ -47,15 +47,19 @@ class BgTaskTracker(
         }
     }
 
-    /** The command's own process ended: whatever of its tree is still alive went background. */
-    fun onFinished(pid: Int) {
+    /**
+     * The command's own process ended: whatever of its tree is still alive went background.
+     * [hint] are pids the session already knows were started (the shell's `$!`); they count even
+     * when the process tree no longer shows how they are related to the command.
+     */
+    fun onFinished(pid: Int, hint: IntArray = IntArray(0)) {
         pollJob?.cancel()
         scope.launch(Dispatchers.IO) {
             delay(SETTLE_MS)
             val all = snapshot() ?: return@launch
             val fresh = all
                 .filter { it.pid != pid }
-                .filter { seen[it.pid] == it.name || it.pgid == pid || it.sid == pid }
+                .filter { seen[it.pid] == it.name || it.pgid == pid || it.sid == pid || it.pid in hint }
                 .filter { tracked.putIfAbsent(it.pid, it.name) == null }
             seen.clear()
             if (fresh.isNotEmpty()) {
@@ -63,6 +67,12 @@ class BgTaskTracker(
                 watch()
             }
         }
+    }
+
+    /** The command's background jobs were stopped on purpose: stop looking for them. */
+    fun onStopped() {
+        pollJob?.cancel()
+        seen.clear()
     }
 
     /** Tells when each background task is gone. Runs only while something is tracked. */

@@ -11,11 +11,11 @@ import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import frb.axeron.api.Axeron
-import frb.axeron.api.AxeronCommandSession
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.api.utils.AnsiFilter
 import frb.axeron.axerish.R
 import frb.axeron.manager.ui.util.BgTaskTracker
+import frb.axeron.manager.ui.util.QuickShellSession
 import frb.axeron.manager.ui.util.RootlessShell
 import frb.axeron.manager.ui.util.TerminalBuffer
 import frb.axeron.manager.ui.util.TerminalPrefs
@@ -23,7 +23,7 @@ import java.io.File
 
 class QuickShellViewModel(application: Application) : AndroidViewModel(application) {
 
-    var session: AxeronCommandSession = AxeronCommandSession()
+    var session: QuickShellSession = QuickShellSession(application)
     private var savedCommand: TextFieldValue? = null
 
     // Lives here, not in the screen, so the log survives leaving and re-entering QuickShell.
@@ -40,8 +40,12 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     private var wrappedCommand: String? = null
     private var currentPid = -1
 
+    /** What the session reported for the command that just ended; read by onProcessFinished. */
+    private var backgroundHint = IntArray(0)
+    private var backgroundStopped = false
+
     init {
-        session.setProcessListener(object : AxeronCommandSession.ProcessListener {
+        session.setProcessListener(object : QuickShellSession.ProcessListener {
             override fun onProcessCreated(pid: Int, rawCommand: String) {
                 Log.i("QuickShellViewModel", "onProcessCreated: $pid")
                 val command = if (wrappedCommand?.trim() == rawCommand.trim()) displayCommand ?: rawCommand else rawCommand
@@ -67,9 +71,24 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
                 commandText = TextFieldValue("")
             }
 
+            override fun onProcessBackground(pids: IntArray) {
+                backgroundHint = pids
+            }
+
+            override fun onBackgroundStopped() {
+                backgroundStopped = true
+                append(OutputType.TYPE_START, "[bgtask] stopped by shell restriction")
+            }
+
             override fun onProcessFinished(exitCode: Int, lastOutput: String) {
                 Log.i("QuickShellViewModel", "onProcessFinished: $exitCode")
-                if (currentPid > 0) bgTasks.onFinished(currentPid)
+                if (currentPid > 0) {
+                    // Stopped by the restriction: nothing is left to report or to follow.
+                    if (backgroundStopped) bgTasks.onStopped()
+                    else bgTasks.onFinished(currentPid, backgroundHint)
+                }
+                backgroundHint = IntArray(0)
+                backgroundStopped = false
                 currentPid = -1
                 terminal.endStreams()
                 if (!AnsiFilter.isScreenControl(lastOutput)) {
@@ -85,7 +104,7 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
             }
         })
 
-        session.setResultListener(object : AxeronCommandSession.ResultListener {
+        session.setResultListener(object : QuickShellSession.ResultListener {
             override fun output(output: CharSequence?) {
                 output?.let { terminal.write(OutputType.TYPE_STDOUT, it.toString()) }
             }
@@ -121,8 +140,14 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     )
         private set
 
+    // After the property above: an init block earlier in the class would read it uninitialised.
+    init {
+        session.setRestrictBackground(isShellRestrictionEnabled)
+    }
+
     fun setShellRestriction(enable: Boolean) {
         isShellRestrictionEnabled = enable
+        session.setRestrictBackground(enable)
         prefs.edit {
             putBoolean("shell_restriction", enable)
         }
