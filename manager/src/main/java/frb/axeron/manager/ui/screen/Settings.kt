@@ -100,7 +100,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
     val activateViewModel = viewModelGlobal.activateViewModel
     val settings = viewModelGlobal.settingsViewModel
 //    val privilegeViewModel = viewModelGlobal.privilegeViewModel
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(LocalTabScrollStates.current?.settingsBar ?: rememberTopAppBarState())
     val confirmDialog = rememberConfirmDialog()
     val scope = rememberCoroutineScope()
 

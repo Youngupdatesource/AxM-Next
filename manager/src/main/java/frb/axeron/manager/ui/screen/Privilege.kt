@@ -59,7 +59,7 @@ fun PrivilegeScreen(
     viewModelGlobal: ViewModelGlobal
 ) {
     val privilegeViewModel = viewModelGlobal.privilegeViewModel
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(LocalTabScrollStates.current?.privilegeBar ?: rememberTopAppBarState())
     val listState = LocalTabScrollStates.current?.privilege ?: rememberLazyListState()
 
     UseLifecycle(

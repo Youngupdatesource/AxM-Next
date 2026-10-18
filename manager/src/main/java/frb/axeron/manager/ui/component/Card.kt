@@ -1,5 +1,6 @@
 package frb.axeron.manager.ui.component
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.outlined.AdminPanelSettings
@@ -141,14 +142,10 @@ private fun StatTile(
     title: String,
     count: Int,
     icon: ImageVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-    ) {
+    val tileContent: @Composable ColumnScope.() -> Unit = {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -175,6 +172,25 @@ private fun StatTile(
             }
         }
     }
+
+    if (onClick != null) {
+        Card(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            content = tileContent
+        )
+    } else {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            content = tileContent
+        )
+    }
 }
 
 @Composable
@@ -182,6 +198,7 @@ private fun StatTile(
 fun PluginCard(
     modifier: Modifier = Modifier,
     pluginViewModel: PluginViewModel = viewModel(),
+    onClick: (() -> Unit)? = null,
 ) {
     val countTotal = pluginViewModel.plugins.size
     StatTile(
@@ -192,7 +209,8 @@ fun PluginCard(
         },
         count = countTotal,
         icon = Icons.Outlined.Extension,
-        modifier = modifier
+        modifier = modifier,
+        onClick = onClick
     )
 }
 
@@ -201,6 +219,7 @@ fun PluginCard(
 fun PrivilegeCard(
     modifier: Modifier = Modifier,
     privilegeViewModel: PrivilegeViewModel = viewModel(),
+    onClick: (() -> Unit)? = null,
 ) {
     val countTotal = privilegeViewModel.privilegedCount
     StatTile(
@@ -211,6 +230,7 @@ fun PrivilegeCard(
         },
         count = countTotal,
         icon = Icons.Outlined.AdminPanelSettings,
-        modifier = modifier
+        modifier = modifier,
+        onClick = onClick
     )
 }

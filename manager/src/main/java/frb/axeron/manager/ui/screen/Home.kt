@@ -87,6 +87,10 @@ import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.ActivateScreenDestination
+import com.ramcosta.composedestinations.spec.DirectionDestinationSpec
+import com.ramcosta.composedestinations.generated.destinations.PrivilegeScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.PluginScreenDestination
+import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.QuickShellScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import frb.axeron.manager.ui.util.LocalTabScrollStates
@@ -124,12 +128,23 @@ import frb.axeron.manager.ui.theme.cardContainerColor
 @Destination<RootGraph>(start = true)
 @Composable
 fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlobal) {
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(LocalTabScrollStates.current?.homeBar ?: rememberTopAppBarState())
     val pluginViewModel = viewModelGlobal.pluginViewModel
     val privilegeViewModel = viewModelGlobal.privilegeViewModel
     val activateViewModel = viewModelGlobal.activateViewModel
 
     val isRunning = activateViewModel.activateStatus is ActivateViewModel.ActivateStatus.Running
+
+    // Buka tab lain persis seperti mengetuk kapsul navigasi (state tab dipulihkan).
+    val openTab: (DirectionDestinationSpec) -> Unit = { destination ->
+        navigator.navigate(destination) {
+            popUpTo(NavGraphs.root) {
+                saveState = true
+            }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -249,11 +264,13 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                 ) {
                     PrivilegeCard(
                         Modifier.weight(1f),
-                        privilegeViewModel
+                        privilegeViewModel,
+                        onClick = { openTab(PrivilegeScreenDestination) }
                     )
                     PluginCard(
                         Modifier.weight(1f),
-                        pluginViewModel
+                        pluginViewModel,
+                        onClick = { openTab(PluginScreenDestination) }
                     )
                 }
             }
@@ -261,9 +278,9 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
             UpdateCard()
             InfoCard(activateViewModel)
 
+            IssueReportCard()
             SupportCard()
             LearnCard()
-            IssueReportCard()
         }
     }
 }

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package frb.axeron.manager.ui
 
 import android.content.Context
@@ -53,6 +55,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -339,8 +345,20 @@ class AxActivity : ComponentActivity() {
         val privilegeList = rememberLazyListState()
         val pluginList = rememberLazyListState()
         val settingsScroll = rememberScrollState()
-        val tabScroll = remember(homeScroll, privilegeList, pluginList, settingsScroll) {
-            TabScrollStates(homeScroll, privilegeList, pluginList, settingsScroll)
+        // Keadaan header (warna saat konten di-scroll) juga dibagi, supaya header preview sama
+        // dengan header layar asli dan tidak "berkedip" saat serah-terima.
+        val homeBar = rememberTopAppBarState()
+        val privilegeBar = rememberTopAppBarState()
+        val pluginBar = rememberTopAppBarState()
+        val settingsBar = rememberTopAppBarState()
+        val tabScroll = remember(
+            homeScroll, privilegeList, pluginList, settingsScroll,
+            homeBar, privilegeBar, pluginBar, settingsBar
+        ) {
+            TabScrollStates(
+                homeScroll, privilegeList, pluginList, settingsScroll,
+                homeBar, privilegeBar, pluginBar, settingsBar
+            )
         }
 
         // Geser kiri/kanan antar tab: konten mengikuti jari, tab tetangga ikut terlihat (preview),
@@ -710,60 +728,115 @@ class AxActivity : ComponentActivity() {
                 val scrubIndexAt: (Float) -> Float = { x ->
                     metrics.pAtX(x, swipe, maxIdx)
                 }
+                val finishScrub: () -> Unit = {
+                    val list = tabsNow.value
+                    val from = swipe.scrubPos
+                    val idx = from.roundToInt().coerceIn(0, (list.size - 1).coerceAtLeast(0))
+                    scope.launch {
+                        // Lanjut dari posisi jari tanpa lompat, lalu mendarat di tab tujuan.
+                        swipe.pill.snapTo(from)
+                        swipe.scrubbing = false
+                        list.getOrNull(idx)?.let { dest ->
+                            if (idx != selectedNow.value) goTo(dest)
+                            swipe.pill.animateTo(
+                                targetValue = idx.toFloat(),
+                                animationSpec = spring(
+                                    dampingRatio = 0.72f,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            )
+                        }
+                    }
+                }
+                val cancelScrub: () -> Unit = {
+                    val back = selectedNow.value.coerceAtLeast(0).toFloat()
+                    scope.launch {
+                        swipe.pill.snapTo(swipe.scrubPos)
+                        swipe.scrubbing = false
+                        swipe.pill.animateTo(
+                            targetValue = back,
+                            animationSpec = spring(
+                                dampingRatio = 0.72f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
 
                 Box(
                     modifier = Modifier
                         .graphicsLayer { this.alpha = fade }
                         .padding(6.dp)
-                        // Tahan lalu geser: indikator ikut jari, lepas = pindah ke tab di bawahnya.
-                        // Tap biasa tetap ditangani CapsuleItem (long-press membatalkan klik).
+                        // Pegang tab terpilih (pill) lalu geser kiri/kanan: lepas = pindah ke tab di
+                        // bawahnya. Menggeser pill langsung "mengambilnya" tanpa menunggu; tertahan
+                        // sebentar (CapsuleGrabDelayMs) juga mengambilnya (getar) agar siap digeser.
+                        // Sentuhan di ikon lain / tap biasa tetap ditangani CapsuleItem.
                         .pointerInput(metrics) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { offset ->
-                                    swipe.job?.cancel()
-                                    swipe.scrubPos = scrubIndexAt(offset.x)
-                                    swipe.scrubbing = true
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    swipe.scrubPos = scrubIndexAt(change.position.x)
-                                },
-                                onDragEnd = {
-                                    val list = tabsNow.value
-                                    val from = swipe.scrubPos
-                                    val idx = from.roundToInt().coerceIn(0, (list.size - 1).coerceAtLeast(0))
-                                    scope.launch {
-                                        // Lanjut dari posisi jari tanpa lompat, lalu mendarat di tab tujuan.
-                                        swipe.pill.snapTo(from)
-                                        swipe.scrubbing = false
-                                        list.getOrNull(idx)?.let { dest ->
-                                            if (idx != selectedNow.value) goTo(dest)
-                                            swipe.pill.animateTo(
-                                                targetValue = idx.toFloat(),
-                                                animationSpec = spring(
-                                                    dampingRatio = 0.72f,
-                                                    stiffness = Spring.StiffnessMediumLow
-                                                )
-                                            )
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                if (selectedNow.value < 0) return@awaitEachGesture
+                                val startX = down.position.x
+                                val slack = 6.dp.toPx()
+                                val pillL = metrics.pillLeft(swipe, maxIdx)
+                                val pillR = metrics.pillRight(swipe, maxIdx)
+                                if (startX < pillL - slack || startX > pillR + slack) {
+                                    return@awaitEachGesture
+                                }
+
+                                // Fase 1: bergeser melewati touch slop (langsung ambil) atau tertahan
+                                // CapsuleGrabDelayMs (ambil). Jari diangkat lebih dulu = tap biasa.
+                                var released = false
+                                var lastX = startX
+                                withTimeoutOrNull(CapsuleGrabDelayMs) {
+                                    var done = false
+                                    while (!done) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                        if (change == null || change.changedToUpIgnoreConsumed()) {
+                                            released = true
+                                            done = true
+                                        } else {
+                                            lastX = change.position.x
+                                            if (abs(lastX - startX) > viewConfiguration.touchSlop) {
+                                                done = true
+                                            }
                                         }
                                     }
-                                },
-                                onDragCancel = {
-                                    val back = selectedNow.value.coerceAtLeast(0).toFloat()
-                                    scope.launch {
-                                        swipe.pill.snapTo(swipe.scrubPos)
-                                        swipe.scrubbing = false
-                                        swipe.pill.animateTo(
-                                            targetValue = back,
-                                            animationSpec = spring(
-                                                dampingRatio = 0.72f,
-                                                stiffness = Spring.StiffnessMediumLow
-                                            )
-                                        )
-                                    }
                                 }
-                            )
+                                if (released) return@awaitEachGesture
+
+                                // Fase 2: pill dipegang. Posisinya tetap di bawah jari seperti saat
+                                // disentuh (tidak melompat ke tengah jari).
+                                swipe.job?.cancel()
+                                val grabOffset = (pillL + pillR) / 2f - startX
+                                swipe.scrubPos = scrubIndexAt(lastX + grabOffset)
+                                swipe.scrubbing = true
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                var handled = false
+                                try {
+                                    while (!handled) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                        when {
+                                            change == null -> {
+                                                handled = true
+                                                cancelScrub()
+                                            }
+                                            change.changedToUpIgnoreConsumed() -> {
+                                                change.consume()
+                                                handled = true
+                                                finishScrub()
+                                            }
+                                            else -> {
+                                                change.consume()
+                                                swipe.scrubPos = scrubIndexAt(change.position.x + grabOffset)
+                                            }
+                                        }
+                                    }
+                                } finally {
+                                    if (!handled) cancelScrub()
+                                }
+                            }
                         }
                 ) {
                     Row(
@@ -1073,6 +1146,10 @@ private val CapsuleLabelGap = 8.dp
 private val CapsuleLabelMax = 96.dp
 private val CapsuleGap = 24.dp
 private val CapsuleShadow = 10.dp
+
+// Tertahan selama ini di atas pill terpilih = pill "diambil" dan siap digeser (menggeser lebih dulu
+// langsung mengambilnya tanpa menunggu).
+private const val CapsuleGrabDelayMs = 140L
 
 // Keterlihatan isi kapsul (1f = tidak diredupkan). Aktif: ikon biasa 0,75, ikon + label terpilih 0,92.
 // Idle: pill terpilih 0,45, ikon + label terpilih 0,7, ikon biasa 0,6.

@@ -86,7 +86,7 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
     val context = LocalContext.current
     val snackBarHost = LocalSnackbarHost.current
     val pluginViewModel = viewModelGlobal.pluginViewModel
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(LocalTabScrollStates.current?.pluginBar ?: rememberTopAppBarState())
 
     LaunchedEffect(Unit, pluginViewModel.plugins, pluginViewModel.isNeedRefresh) {
         if (pluginViewModel.plugins.isEmpty() || pluginViewModel.isNeedRefresh) {

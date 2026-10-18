@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package frb.axeron.manager.ui.util
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.unit.Dp
@@ -30,7 +33,11 @@ class TabScrollStates(
     val home: ScrollState,
     val privilege: LazyListState,
     val plugin: LazyListState,
-    val settings: ScrollState
+    val settings: ScrollState,
+    val homeBar: TopAppBarState,
+    val privilegeBar: TopAppBarState,
+    val pluginBar: TopAppBarState,
+    val settingsBar: TopAppBarState
 )
 
 val LocalTabScrollStates = compositionLocalOf<TabScrollStates?> { null }

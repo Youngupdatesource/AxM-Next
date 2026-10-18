@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.Context
@@ -116,12 +117,22 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         return application.packageManager.getInstalledPackages(PackageManager.GET_PERMISSIONS)
     }
 
+    private var loadJob: Job? = null
+
     fun loadInstalledApps(refresh: Boolean = true) {
         if (isRefreshing && refresh) return
 
-        viewModelScope.launch {
+        // Hanya satu pemuatan yang boleh jalan: pemuatan lama yang selesai belakangan tidak
+        // boleh menimpa hasil yang lebih baru.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             isRefreshing = refresh
             val pm = application.packageManager
+            // Status izin hanya valid kalau daemon terjangkau. Saat daemon sedang restart,
+            // getFlagsForUid mengembalikan "tidak diizinkan" untuk semua app, itu yang mereset
+            // daftar. Kalau tidak terjangkau, pakai status sebelumnya.
+            val previous = privileges
+            val reachableBefore = Axeron.pingBinder()
 
             val selfUid = android.os.Process.myUid()
 
@@ -148,7 +159,8 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                                 LoadedApp(
                                     packageInfo,
                                     appInfo.loadLabel(pm).toString(),
-                                    granted(appInfo.uid),
+                                    if (reachableBefore) granted(appInfo.uid)
+                                    else previous[appInfo.uid]?.isAdded ?: false,
                                     usesShizuku
                                 )
                             }
@@ -168,7 +180,14 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
 
-            privileges = result
+            val trusted = reachableBefore && Axeron.pingBinder()
+            privileges = if (trusted) {
+                result
+            } else {
+                result.mapValues { (uid, app) ->
+                    previous[uid]?.let { app.copy(isAdded = it.isAdded) } ?: app
+                }
+            }
             isRefreshing = false
         }
     }
