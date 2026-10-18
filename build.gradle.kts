@@ -46,11 +46,17 @@ subprojects {
                 targetSdk = 36
                 versionCode = verCode
                 versionName = verName
+                // Hanya perangkat Android (ARM). x86 / x86_64 (emulator, Chromebook) tidak disertakan.
+                ndk {
+                    abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+                }
             }
             packaging {
                 jniLibs {
                     useLegacyPackaging = true
 //                    excludes += "**/libapplovin-native-crash-reporter.so"
+                    // Android only (ARM): jangan sertakan lib x86 / x86_64 dari modul atau dependensi mana pun.
+                    excludes += listOf("**/x86/**", "**/x86_64/**")
                 }
                 dex {
                     useLegacyPackaging = true
