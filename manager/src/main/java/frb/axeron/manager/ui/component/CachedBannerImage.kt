@@ -1,10 +1,14 @@
 package frb.axeron.manager.ui.component
 
 import android.graphics.Bitmap
+import android.graphics.drawable.Animatable
 import android.util.LruCache
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +24,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
@@ -53,10 +59,27 @@ internal object BannerFrameCache {
     }
 
     @Synchronized
-    fun putFrame(key: String, bitmap: Bitmap) {
+    fun putFrame(key: String, bitmap: Bitmap, replace: Boolean = false) {
         if (bitmap.allocationByteCount > MAX_BYTES / 2) return
-        if (frames.get(key) == null) frames.put(key, bitmap)
+        if (replace || frames.get(key) == null) frames.put(key, bitmap)
     }
+}
+
+/**
+ * Screens drawn only as a preview (the swipe-between-tabs peek) switch banner animation off:
+ * a GIF decoding and redrawing every frame under a moving page is what made transitions lag.
+ */
+val LocalBannerAnimationAllowed = compositionLocalOf { true }
+
+/**
+ * Banners animate only while their own screen is fully RESUMED. A navigation entry is not
+ * resumed while it slides in or out, so during a transition the banner shows its still frame
+ * and starts moving once the screen has settled.
+ */
+@Composable
+fun rememberBannerAnimate(): Boolean {
+    val state by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
+    return state.isAtLeast(Lifecycle.State.RESUMED) && LocalBannerAnimationAllowed.current
 }
 
 /**
@@ -76,11 +99,11 @@ fun CachedBannerImage(
     modifier: Modifier = Modifier,
     alpha: Float = 1f,
     alignment: Alignment = Alignment.Center,
-    animate: Boolean = true,
+    animate: Boolean = rememberBannerAnimate(),
 ) {
     val context = LocalContext.current
     var areaSize by remember(cacheKey) { mutableStateOf(BannerFrameCache.size(cacheKey)) }
-    val cached = remember(cacheKey) { BannerFrameCache.frame(cacheKey)?.asImageBitmap() }
+    var cached by remember(cacheKey) { mutableStateOf(BannerFrameCache.frame(cacheKey)?.asImageBitmap()) }
 
     Box(
         modifier = modifier.onSizeChanged {
@@ -108,18 +131,36 @@ fun CachedBannerImage(
             if (success != null && BannerFrameCache.frame(cacheKey) == null) {
                 runCatching { success.result.drawable.toBitmap() }
                     .getOrNull()
-                    ?.let { BannerFrameCache.putFrame(cacheKey, it) }
+                    ?.let {
+                        BannerFrameCache.putFrame(cacheKey, it)
+                        cached = it.asImageBitmap()
+                    }
+            }
+        }
+
+        // When the live painter leaves (transition started, tab left) keep the frame it was
+        // showing, so the banner freezes where it was instead of jumping back to frame 0.
+        DisposableEffect(success) {
+            onDispose {
+                val drawable = success?.result?.drawable
+                if (drawable is Animatable) {
+                    runCatching { drawable.toBitmap() }.getOrNull()?.let {
+                        BannerFrameCache.putFrame(cacheKey, it, replace = true)
+                        cached = it.asImageBitmap()
+                    }
+                }
             }
         }
 
         // The cached frame stays until the live painter has an image, then the two swap in the
         // same composition (never both drawn, so no double alpha and no blank frame).
-        if (cached != null && success == null) {
+        val frame = cached
+        if (frame != null && success == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .paint(
-                        BitmapPainter(cached),
+                        BitmapPainter(frame),
                         sizeToIntrinsics = false,
                         alignment = alignment,
                         contentScale = ContentScale.Crop,
@@ -127,7 +168,7 @@ fun CachedBannerImage(
                     )
             )
         }
-        if (painter != null && (success != null || cached == null)) {
+        if (painter != null && (success != null || frame == null)) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

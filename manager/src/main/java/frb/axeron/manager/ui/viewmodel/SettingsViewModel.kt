@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.manager.ui.theme.basePrimaryDefault
 import frb.axeron.manager.ui.theme.toHexString
+import frb.axeron.manager.ui.util.DynamicColorPrefs
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,7 +39,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         private set
 
     var isDynamicColorEnabled by mutableStateOf(
-        AxeronSettings.getEnableDynamicColor()
+        DynamicColorPrefs.isEnabled()
     )
         private set
 
@@ -90,7 +91,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setDynamicColor(enabled: Boolean) {
         viewModelScope.launch {
             isDynamicColorEnabled = enabled
-            AxeronSettings.setEnableDynamicColor(enabled)
+            DynamicColorPrefs.setEnabled(enabled)
         }
     }
 

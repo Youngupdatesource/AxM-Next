@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DoNotTouch
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Output
@@ -326,6 +327,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     bottom = 22.dp + LocalCapsuleInset.current
                 ),
                 jumpButtonPadding = PaddingValues(bottom = jumpButtonBottom),
+                jumpButtonAlignWithFab = true,
                 textViewerOpen = showTextViewer,
                 onTextViewerDismiss = { showTextViewer = false },
                 searchOpen = showSearch,
@@ -629,6 +631,19 @@ fun ExtraSettings(
                         checked = quickShellViewModel.isCompatModeEnabled,
                         onSwitchChange = { quickShellViewModel.setCompatMode(it) }
                     )
+                }
+
+                // Only the root server can lower a command to the shell level.
+                if (quickShellViewModel.isRootMode) {
+                    run {
+                        SettingsItem(
+                            iconVector = Icons.Outlined.BugReport,
+                            label = stringResource(R.string.rootless_debugging),
+                            description = stringResource(R.string.rootless_debugging_desc),
+                            checked = quickShellViewModel.isRootlessEnabled,
+                            onSwitchChange = { quickShellViewModel.setRootless(it) }
+                        )
+                    }
                 }
             }
         }

@@ -28,6 +28,16 @@ import java.net.SocketException
 import java.util.concurrent.atomic.AtomicBoolean
 
 object AdbStarter {
+
+    /**
+     * This app's ADB identity: stored in its preferences, falling back to the copy a previous
+     * activation saved in Settings.Global. Shared by wireless, TCP and OTG activation.
+     */
+    fun adbKeyStore(context: Context) = PreferenceAdbKeyStore(
+        AxeronSettings.getPreferences(),
+        Settings.Global.getString(context.contentResolver, Starter.KEY_PAIR)
+    )
+
     private const val TAG = "AdbStarter"
 
     @RequiresApi(Build.VERSION_CODES.R)

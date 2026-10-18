@@ -15,6 +15,8 @@ import frb.axeron.api.AxeronCommandSession
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.api.utils.AnsiFilter
 import frb.axeron.axerish.R
+import frb.axeron.manager.ui.util.BgTaskTracker
+import frb.axeron.manager.ui.util.RootlessShell
 import frb.axeron.manager.ui.util.TerminalBuffer
 import frb.axeron.manager.ui.util.TerminalPrefs
 import java.io.File
@@ -30,10 +32,21 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
         unlimited = TerminalPrefs.unlimited
     )
 
+    /** Reports what a command leaves running in the background as `[bgtask] pid=...`. */
+    private val bgTasks = BgTaskTracker(viewModelScope) { append(OutputType.TYPE_START, it) }
+
+    /** What the user typed for the command that is running; the wrapped form is never shown. */
+    private var displayCommand: String? = null
+    private var wrappedCommand: String? = null
+    private var currentPid = -1
+
     init {
         session.setProcessListener(object : AxeronCommandSession.ProcessListener {
-            override fun onProcessCreated(pid: Int, command: String) {
+            override fun onProcessCreated(pid: Int, rawCommand: String) {
                 Log.i("QuickShellViewModel", "onProcessCreated: $pid")
+                val command = if (wrappedCommand?.trim() == rawCommand.trim()) displayCommand ?: rawCommand else rawCommand
+                currentPid = pid
+                bgTasks.onStarted(pid)
                 if (command.lines().size > 1) {
                     append(OutputType.TYPE_COMMAND, "[command]")
                     append(OutputType.TYPE_COMMAND, command.trim())
@@ -56,6 +69,8 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
 
             override fun onProcessFinished(exitCode: Int, lastOutput: String) {
                 Log.i("QuickShellViewModel", "onProcessFinished: $exitCode")
+                if (currentPid > 0) bgTasks.onFinished(currentPid)
+                currentPid = -1
                 terminal.endStreams()
                 if (!AnsiFilter.isScreenControl(lastOutput)) {
                     append(OutputType.TYPE_EXIT, "[exit] code=$exitCode")
@@ -126,6 +141,19 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     }
 
 
+    /** Rootless debugging: only meaningful (and only offered) when the server runs as root. */
+    var isRootlessEnabled: Boolean by mutableStateOf(prefs.getBoolean("shell_rootless", false))
+        private set
+
+    fun setRootless(enable: Boolean) {
+        isRootlessEnabled = enable
+        prefs.edit { putBoolean("shell_rootless", enable) }
+    }
+
+    /** True when the server is root, so lowering to shell is possible. */
+    val isRootMode: Boolean
+        get() = runCatching { Axeron.pingBinder() && Axeron.getAxeronInfo().isRoot() }.getOrDefault(false)
+
     var isRunning by mutableStateOf(false)
         private set
 
@@ -152,7 +180,14 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
             .replace(Regex("(?i)adb\\s+shell\\s+"), "")
             .replace(Regex("[^\\p{Print}\\n]"), "") // sanitize
 
-        session.runCommand(cmd, isCompatModeEnabled)
+        // While a process runs, the input is its stdin: never wrap that.
+        val lowered = !isRunning && isRootlessEnabled && isRootMode
+        val toRun = if (lowered) RootlessShell.wrap(cmd) else cmd
+        if (lowered) {
+            displayCommand = cmd
+            wrappedCommand = toRun
+        }
+        session.runCommand(toRun, isCompatModeEnabled)
     }
 
     private fun append(type: OutputType, output: String) {
@@ -162,6 +197,7 @@ class QuickShellViewModel(application: Application) : AndroidViewModel(applicati
     override fun onCleared() {
         super.onCleared()
         if (Axeron.pingBinder()) stop()
+        bgTasks.close()
         terminal.close()
     }
 }

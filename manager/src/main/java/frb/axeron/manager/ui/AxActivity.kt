@@ -97,6 +97,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.max
+import frb.axeron.manager.ui.component.LocalBannerAnimationAllowed
 import frb.axeron.manager.ui.screen.HomeScreen
 import frb.axeron.manager.ui.screen.PrivilegeScreen
 import frb.axeron.manager.ui.screen.SettingsScreen
@@ -499,11 +500,14 @@ class AxActivity : ComponentActivity() {
         navigator: DestinationsNavigator,
         viewModelGlobal: ViewModelGlobal
     ) {
-        when (tab) {
-            BottomBarDestination.Home -> HomeScreen(navigator, viewModelGlobal)
-            BottomBarDestination.Privilege -> PrivilegeScreen(navigator, viewModelGlobal)
-            BottomBarDestination.Plugin -> PluginScreen(navigator, viewModelGlobal)
-            BottomBarDestination.Settings -> SettingsScreen(navigator, viewModelGlobal)
+        // A peek under a moving page: still frames only, no GIF decoding while swiping.
+        CompositionLocalProvider(LocalBannerAnimationAllowed provides false) {
+            when (tab) {
+                BottomBarDestination.Home -> HomeScreen(navigator, viewModelGlobal)
+                BottomBarDestination.Privilege -> PrivilegeScreen(navigator, viewModelGlobal)
+                BottomBarDestination.Plugin -> PluginScreen(navigator, viewModelGlobal)
+                BottomBarDestination.Settings -> SettingsScreen(navigator, viewModelGlobal)
+            }
         }
     }
 

@@ -22,7 +22,7 @@ object TerminalPrefs {
     private var _textScale by mutableFloatStateOf(
         prefs.getFloat(KEY_TEXT_SCALE, 1f).coerceIn(MIN_SCALE, MAX_SCALE)
     )
-    private var _unlimited by mutableStateOf(prefs.getBoolean(KEY_UNLIMITED, false))
+    private var _unlimited by mutableStateOf(prefs.getBoolean(KEY_UNLIMITED, true))
 
     var lineNumbers: Boolean
         get() = _lineNumbers

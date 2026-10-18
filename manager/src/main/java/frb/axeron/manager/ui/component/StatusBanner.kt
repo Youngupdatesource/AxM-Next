@@ -207,7 +207,7 @@ fun StatusBannerImage(file: File, modifier: Modifier = Modifier) {
         model = file,
         modifier = modifier,
         alignment = BiasAlignment(BannerStore.focusX * 2f - 1f, BannerStore.focusY * 2f - 1f),
-        animate = visible
+        animate = visible && rememberBannerAnimate()
     )
 }
 

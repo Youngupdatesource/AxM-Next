@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Adb
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.Usb
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.Button
@@ -49,6 +50,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +74,7 @@ import frb.axeron.api.core.Starter
 import frb.axeron.manager.R
 import frb.axeron.manager.adb.AdbStateInfo
 import frb.axeron.manager.ui.component.ConfirmResult
+import frb.axeron.manager.adb.OtgActivator
 import frb.axeron.manager.ui.component.rememberConfirmDialog
 import frb.axeron.manager.ui.component.rememberLoadingDialog
 import frb.axeron.manager.ui.util.ClipboardUtil
@@ -158,6 +164,7 @@ fun ActivateScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                 WirelessDebuggingCard(navigator, activateViewModel)
             }
             RootCard(navigator, activateViewModel)
+            OtgActivateCard()
             ComputerCard()
         }
     }
@@ -710,6 +717,60 @@ fun ComputerCard() {
                     contentDescription = title
                 )
                 Text(title)
+            }
+        }
+    }
+}
+
+@Composable
+fun OtgActivateCard() {
+    val context = LocalContext.current
+    var showSheet by remember { mutableStateOf(false) }
+    val supported = remember { OtgActivator.isUsbHostSupported(context) }
+
+    if (showSheet) {
+        OtgActivationSheet(onDismissRequest = { showSheet = false })
+    }
+
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Usb,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = stringResource(R.string.activate_by_otg),
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.activate_by_otg_desc) +
+                        if (supported) "" else "\n" + stringResource(R.string.otg_target_only),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Button(
+                onClick = { showSheet = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.otg_open))
             }
         }
     }

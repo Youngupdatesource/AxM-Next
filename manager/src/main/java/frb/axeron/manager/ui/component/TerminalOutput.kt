@@ -59,6 +59,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -183,6 +184,8 @@ fun <K : Any> TerminalOutput(
     filter: ((K) -> Boolean)? = null,
     color: @Composable (K) -> Color = { MaterialTheme.colorScheme.onSurfaceVariant },
     jumpButtonPadding: PaddingValues = PaddingValues(0.dp),
+    /** Center the nav pill on a 56dp FAB that sits at the bottom end (16dp margin). */
+    jumpButtonAlignWithFab: Boolean = false,
     state: LazyListState = rememberLazyListState(),
     textViewerOpen: Boolean = false,
     onTextViewerDismiss: () -> Unit = {},
@@ -490,9 +493,21 @@ fun <K : Any> TerminalOutput(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(jumpButtonPadding)
-                .padding(12.dp)
-                // Stay clear of the scrollbar thumb.
-                .padding(end = if (showScrollbar) 14.dp else 0.dp)
+                .then(
+                    if (jumpButtonAlignWithFab) {
+                        // Same 56dp column as a FloatingActionButton: the pill is centered on it
+                        // however wide the line number gets, so the two line up.
+                        Modifier
+                            .padding(end = 16.dp, bottom = 12.dp)
+                            .width(56.dp)
+                            .wrapContentWidth(Alignment.CenterHorizontally, unbounded = true)
+                    } else {
+                        Modifier
+                            .padding(12.dp)
+                            // Stay clear of the scrollbar thumb.
+                            .padding(end = if (showScrollbar) 14.dp else 0.dp)
+                    }
+                )
         ) {
             TerminalNavPill(
                 currentLine = currentLine,

@@ -9,6 +9,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import frb.axeron.api.core.AxeronSettings
+import frb.axeron.manager.ui.util.DynamicColorPrefs
 import frb.axeron.api.core.Engine
 import frb.axeron.manager.ui.theme.basePrimaryDefault
 import frb.axeron.manager.ui.theme.getVortexDarkColorScheme
@@ -39,7 +40,7 @@ object MonetColorsProvider {
             else -> isDark
         }
 
-        val dynamicColor: Boolean = AxeronSettings.getEnableDynamicColor()
+        val dynamicColor: Boolean = DynamicColorPrefs.isEnabled()
 
         val primaryColor = hexToColor(AxeronSettings.getCustomPrimaryColor() ?: basePrimaryDefault.toHexString())
         var colorScheme = if (darkTheme) {
