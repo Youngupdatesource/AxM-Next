@@ -780,6 +780,8 @@ open class AxeronService :
 
     override fun exit() {
         wakeLock.shutdown()
+        // Restart from the manager ends the process right after this; do not lose a pending write.
+        runCatching { configManager.flush() }
         super.exit()
     }
 

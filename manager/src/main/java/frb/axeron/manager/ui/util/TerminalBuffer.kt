@@ -90,7 +90,23 @@ class TerminalBuffer<K : Any>(
     /** Screen clears only wipe lines added after this point (keeps earlier commands). */
     fun markScreenStart() = enqueue(Op.MarkScreenStart)
 
-    fun clear() = enqueue(Op.Clear)
+    /**
+     * Wipes everything. Jumps the queue: output still waiting to be parsed is thrown away
+     * instead of being parsed first and wiped right after (a `dumpsys` flood made Clear wait
+     * seconds behind its own backlog).
+     */
+    fun clear() {
+        synchronized(queueLock) {
+            // Only settings must survive; every other queued op is wiped by the clear anyway.
+            val keep = queue.filterIsInstance<Op.SetUnlimited>()
+            queue = ArrayList<Op>(keep).apply { add(Op.Clear) }
+            clearEpoch++
+            if (!draining) {
+                draining = true
+                worker.execute(::drain)
+            }
+        }
+    }
 
     /**
      * Keep every line on disk (true) or only the last [maxLines] in memory (false). Applies to
@@ -233,6 +249,10 @@ class TerminalBuffer<K : Any>(
     private var queue = ArrayList<Op>()
     private var draining = false
 
+    /** Bumped by [clear]; a batch already taken from the queue before that is dropped. */
+    @Volatile
+    private var clearEpoch = 0
+
     private fun enqueue(op: Op) {
         val start: Boolean
         synchronized(queueLock) {
@@ -246,16 +266,20 @@ class TerminalBuffer<K : Any>(
     /** Only one drain runs at a time (the [draining] flag), so ops apply in order. */
     private fun drain() {
         while (true) {
+            var batchEpoch = 0
             val batch = synchronized(queueLock) {
                 if (queue.isEmpty()) {
                     draining = false
                     return
                 }
+                batchEpoch = clearEpoch
                 queue.also { queue = ArrayList() }
             }
             // Lock per op, not per batch: a flood batch can take a while to parse and the
             // main thread must never wait on it for more than one chunk.
             for (op in batch) {
+                // A clear arrived while this batch was being parsed: the rest is stale.
+                if (batchEpoch != clearEpoch && op !is Op.SetUnlimited) continue
                 synchronized(stateLock) {
                     if (closed) return@synchronized
                     try {
