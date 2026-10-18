@@ -199,30 +199,16 @@ fun StatusBannerImage(file: File, modifier: Modifier = Modifier) {
     }
     val lifecycleState by lifecycle.currentStateFlow.collectAsState()
     val visible = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
-    var areaSize by remember { mutableStateOf(IntSize.Zero) }
 
-    Box(modifier = modifier.onSizeChanged { areaSize = it }) {
-        if (visible && areaSize.width > 0 && areaSize.height > 0) {
-            val painter = rememberAsyncImagePainter(
-                model = ImageRequest.Builder(context)
-                    .data(file)
-                    .memoryCacheKey("status_banner:$version:${areaSize.width}x${areaSize.height}")
-                    .size(areaSize.width, areaSize.height)
-                    .build(),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .paint(
-                        painter,
-                        sizeToIntrinsics = false,
-                        alignment = BiasAlignment(BannerStore.focusX * 2f - 1f, BannerStore.focusY * 2f - 1f),
-                        contentScale = ContentScale.Crop
-                    )
-            )
-        }
-    }
+    // Cache frame terakhir + ukuran area: banner langsung tergambar di frame pertama saat tab
+    // dibuka lagi (geser Home <-> Privileges), tidak lagi kosong lalu muncul (kedip).
+    CachedBannerImage(
+        cacheKey = "status_banner:$version",
+        model = file,
+        modifier = modifier,
+        alignment = BiasAlignment(BannerStore.focusX * 2f - 1f, BannerStore.focusY * 2f - 1f),
+        animate = visible
+    )
 }
 
 /** Dialog untuk menggeser gambar: bagian yang tampil di banner mengikuti jari. */

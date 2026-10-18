@@ -291,10 +291,16 @@ class TerminalBuffer<K : Any>(
                         store = RingStore(maxLines, store.tail)
                         streams.values.forEach { it.position = -1 }
                         generation++
+                    } catch (e: RuntimeException) {
+                        // Never let a parsing/state error escape: on the worker pool it kills the
+                        // whole app. Drop the open lines and carry on with the next op.
+                        Log.w(TAG, "op failed, resetting open lines", e)
+                        streams.clear()
+                        generation++
                     }
                     version++
                 }
-                schedulePublish()
+                if (op === Op.Clear) publishNow() else schedulePublish()
             }
         }
     }
@@ -490,6 +496,12 @@ class TerminalBuffer<K : Any>(
             Snapshot(store.head, store.tail, version, generation, store is SpoolStore)
         }
         snapshot = next
+    }
+
+    /** Publishes right away (used by clear) so the UI never keeps drawing wiped lines. */
+    private fun publishNow() {
+        synchronized(publishLock) { publishScheduled = true }
+        publisher?.invoke(publishTask) ?: mainHandler.post(publishTask)
     }
 
     private fun schedulePublish() {

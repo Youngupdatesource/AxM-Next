@@ -367,7 +367,13 @@ fun <K : Any> TerminalOutput(
                     val position = shown.positionAt(i)
                     // Re-read on every publish: an open line (progress bar) changes in place.
                     val line = remember(position, version) { buffer.lineAt(position) }
-                        ?: return@items
+                    if (line == null) {
+                        // Stale snapshot (e.g. right after Clear while output is still streaming):
+                        // the line is gone. An item must always emit something, an empty one
+                        // crashes the lazy layout.
+                        Spacer(Modifier.height(0.dp))
+                        return@items
+                    }
                     val mark = highlight?.takeIf { it.line == line.number }
                     val currentStart = matches.getOrNull(current)
                         ?.takeIf { it.position == position }?.start ?: -1

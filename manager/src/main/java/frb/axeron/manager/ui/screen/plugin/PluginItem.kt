@@ -58,6 +58,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import frb.axeron.manager.ui.component.CachedBannerImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.produceState
 import coil.request.ImageRequest
 import com.ramcosta.composedestinations.generated.destinations.ExecutePluginActionScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -351,58 +355,46 @@ fun PluginItem(
                         .matchParentSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (plugin.prop.banner.startsWith(
-                            "https",
-                            true
-                        ) || plugin.prop.banner.startsWith(
-                            "http",
-                            true
-                        )
+                    val isRemote = plugin.prop.banner.startsWith("http", true)
+                    val bannerKey = "plugin_banner:${plugin.prop.id}:${plugin.prop.banner}"
+                    // Baca file banner sekali, di luar main thread, dan simpan di memori proses.
+                    // Sebelumnya dibaca lewat Binder di main thread setiap item masuk komposisi.
+                    val bannerData by produceState<Any?>(
+                        initialValue = if (isRemote) plugin.prop.banner
+                        else PluginBannerBytes.get(bannerKey),
+                        bannerKey
                     ) {
-                        AsyncImage(
-                            model = plugin.prop.banner,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(),
-                            contentScale = ContentScale.Crop,
-                            alpha = 0.18f
-                        )
-                    } else {
-                        val bannerData = remember(plugin.prop.id) {
-                            try {
-                                val path = File(
-                                    PathHelper.getWorkingPath(
-                                        Axeron.getAxeronInfo().isRoot(),
-                                        AxeronApiConstant.folder.PARENT_PLUGIN
-                                    ),
-                                    plugin.prop.id
-                                )
-                                val bannerFile = File(path, plugin.prop.banner)
-                                val file =
+                        if (isRemote) {
+                            value = plugin.prop.banner
+                        } else if (value == null) {
+                            value = withContext(Dispatchers.IO) {
+                                try {
+                                    val path = File(
+                                        PathHelper.getWorkingPath(
+                                            Axeron.getAxeronInfo().isRoot(),
+                                            AxeronApiConstant.folder.PARENT_PLUGIN
+                                        ),
+                                        plugin.prop.id
+                                    )
+                                    val bannerFile = File(path, plugin.prop.banner)
                                     Axeron.newFileService()
                                         .setFileInputStream(bannerFile.absolutePath)
-                                file?.use {
-                                    it.readBytes()
+                                        ?.use { it.readBytes() }
+                                        ?.also { PluginBannerBytes.put(bannerKey, it) }
+                                } catch (_: Exception) {
+                                    null
                                 }
-                            } catch (_: Exception) {
-                                null
                             }
                         }
-                        if (bannerData != null) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(bannerData)
-                                    .build(),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight(),
-                                contentScale = ContentScale.Crop,
-                                alpha = 0.18f
-                            )
-                        }
                     }
+                    CachedBannerImage(
+                        cacheKey = bannerKey,
+                        model = bannerData,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(),
+                        alpha = 0.18f
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -785,4 +777,14 @@ fun PluginItem(
             }
         }
     }
+}
+
+/** Bytes banner plugin yang sudah dibaca, supaya tidak di-IPC ulang tiap tab dibuka. */
+private object PluginBannerBytes {
+    private val cache = object : android.util.LruCache<String, ByteArray>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: ByteArray): Int = value.size
+    }
+
+    fun get(key: String): ByteArray? = synchronized(this) { cache.get(key) }
+    fun put(key: String, value: ByteArray) = synchronized(this) { cache.put(key, value) }
 }
