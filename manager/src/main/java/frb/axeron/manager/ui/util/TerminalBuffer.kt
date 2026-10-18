@@ -2,6 +2,7 @@ package frb.axeron.manager.ui.util
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
@@ -9,15 +10,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import frb.axeron.api.utils.AnsiFilter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asExecutor
 import java.io.BufferedWriter
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.io.RandomAccessFile
-import java.util.concurrent.Executor
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Line model for command output, fed with the raw stream exactly as the process wrote it.
@@ -31,9 +31,12 @@ import java.util.concurrent.Executor
  * - `ESC[2J`, `ESC[J`, `ESC[H`, `ESC c` clear the screen back to [markScreenStart].
  * - SGR colour sequences stay in the text for ANSI rendering; other control sequences are dropped.
  *
- * Built for floods (e.g. `dumpsys`): callers only enqueue, parsing runs serially off the main
- * thread, and the UI gets a small [Snapshot] at most once per [publishIntervalMs] and reads
- * the visible lines on demand with [lineAt].
+ * Threading (same idea as a state list filled from the main thread): callers on any thread only
+ * enqueue; ALL parsing, [clear] and publishing happen on the main thread, in short time slices
+ * (~[SLICE_MS] ms) so a flood (e.g. `dumpsys`) never freezes the UI. Because the store changes
+ * and the [Snapshot] is published in the same main-thread step, the UI can never draw a
+ * snapshot that no longer matches the store (the cause of crashes when clearing mid-output),
+ * and [clear] takes effect immediately, dropping whatever output was still queued.
  *
  * Storage: the last [maxLines] in memory by default. [setUnlimited] keeps every line instead,
  * spooled to a file in [spoolDir] with only a ~13 byte index entry per line in memory, so
@@ -44,9 +47,6 @@ class TerminalBuffer<K : Any>(
     private val maxLines: Int = 20_000,
     private val spoolDir: File? = null,
     unlimited: Boolean = false,
-    private val publishIntervalMs: Long = 32,
-    private val worker: Executor = Dispatchers.Default.asExecutor(),
-    private val publisher: ((Runnable) -> Unit)? = null,
 ) {
 
     /**
@@ -91,21 +91,20 @@ class TerminalBuffer<K : Any>(
     fun markScreenStart() = enqueue(Op.MarkScreenStart)
 
     /**
-     * Wipes everything. Jumps the queue: output still waiting to be parsed is thrown away
-     * instead of being parsed first and wiped right after (a `dumpsys` flood made Clear wait
-     * seconds behind its own backlog).
+     * Wipes everything, right now when called on the main thread. Output still waiting in the
+     * queue is thrown away (only [setUnlimited] survives), so there is no backlog to wait for.
      */
-    fun clear() {
-        synchronized(queueLock) {
-            // Only settings must survive; every other queued op is wiped by the clear anyway.
-            val keep = queue.filterIsInstance<Op.SetUnlimited>()
-            queue = ArrayList<Op>(keep).apply { add(Op.Clear) }
-            clearEpoch++
-            if (!draining) {
-                draining = true
-                worker.execute(::drain)
-            }
+    fun clear() = runOnMain {
+        val keep = ArrayList<Op>()
+        while (true) {
+            val op = queue.poll() ?: break
+            if (op is Op.SetUnlimited) keep.add(op)
         }
+        synchronized(stateLock) {
+            keep.forEach(::applyLocked)
+            applyLocked(Op.Clear)
+        }
+        publish()
     }
 
     /**
@@ -245,64 +244,63 @@ class TerminalBuffer<K : Any>(
         data object Clear : Op
     }
 
-    private val queueLock = Any()
-    private var queue = ArrayList<Op>()
-    private var draining = false
-
-    /** Bumped by [clear]; a batch already taken from the queue before that is dropped. */
-    @Volatile
-    private var clearEpoch = 0
+    private val queue = ConcurrentLinkedQueue<Op>()
+    private val drainScheduled = AtomicBoolean(false)
+    private val drainTask = Runnable { drain() }
 
     private fun enqueue(op: Op) {
-        val start: Boolean
-        synchronized(queueLock) {
-            queue.add(op)
-            start = !draining
-            if (start) draining = true
-        }
-        if (start) worker.execute(::drain)
+        queue.add(op)
+        scheduleDrain()
     }
 
-    /** Only one drain runs at a time (the [draining] flag), so ops apply in order. */
+    private fun scheduleDrain() {
+        if (drainScheduled.compareAndSet(false, true)) mainHandler.post(drainTask)
+    }
+
+    private fun runOnMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
+
+    /**
+     * Main thread only. Applies queued ops for at most [SLICE_MS] ms, publishes, and yields so
+     * frames can render; the rest continues in the next slice.
+     */
     private fun drain() {
-        while (true) {
-            var batchEpoch = 0
-            val batch = synchronized(queueLock) {
-                if (queue.isEmpty()) {
-                    draining = false
-                    return
-                }
-                batchEpoch = clearEpoch
-                queue.also { queue = ArrayList() }
-            }
-            // Lock per op, not per batch: a flood batch can take a while to parse and the
-            // main thread must never wait on it for more than one chunk.
-            for (op in batch) {
-                // A clear arrived while this batch was being parsed: the rest is stale.
-                if (batchEpoch != clearEpoch && op !is Op.SetUnlimited) continue
-                synchronized(stateLock) {
-                    if (closed) return@synchronized
-                    try {
-                        apply(op)
-                    } catch (e: IOException) {
-                        // Spool failed (e.g. storage full): keep going in memory from here.
-                        Log.w(TAG, "spool failed, falling back to memory", e)
-                        store.close()
-                        store = RingStore(maxLines, store.tail)
-                        streams.values.forEach { it.position = -1 }
-                        generation++
-                    } catch (e: RuntimeException) {
-                        // Never let a parsing/state error escape: on the worker pool it kills the
-                        // whole app. Drop the open lines and carry on with the next op.
-                        Log.w(TAG, "op failed, resetting open lines", e)
-                        streams.clear()
-                        generation++
-                    }
-                    version++
-                }
-                if (op === Op.Clear) publishNow() else schedulePublish()
+        drainScheduled.set(false)
+        var applied = false
+        val deadline = SystemClock.uptimeMillis() + SLICE_MS
+        synchronized(stateLock) {
+            while (true) {
+                val op = queue.poll() ?: break
+                applyLocked(op)
+                applied = true
+                if (SystemClock.uptimeMillis() >= deadline) break
             }
         }
+        if (applied) publish()
+        if (!queue.isEmpty()) scheduleDrain()
+    }
+
+    /** Called with [stateLock] held. */
+    private fun applyLocked(op: Op) {
+        if (closed) return
+        try {
+            apply(op)
+        } catch (e: IOException) {
+            // Spool failed (e.g. storage full): keep going in memory from here.
+            Log.w(TAG, "spool failed, falling back to memory", e)
+            store.close()
+            store = RingStore(maxLines, store.tail)
+            streams.values.forEach { it.position = -1 }
+            generation++
+        } catch (e: RuntimeException) {
+            // Never let a parsing/state error escape: it would kill the whole app.
+            // Drop the open lines and carry on with the next op.
+            Log.w(TAG, "op failed, resetting open lines", e)
+            streams.clear()
+            generation++
+        }
+        version++
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -487,29 +485,12 @@ class TerminalBuffer<K : Any>(
     // ---- publishing to Compose ----
 
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
-    private val publishLock = Any()
-    private var publishScheduled = false
 
-    private val publishTask = Runnable {
-        val next = synchronized(stateLock) {
-            synchronized(publishLock) { publishScheduled = false }
+    /** Main thread only: store and snapshot change in the same step, so they always match. */
+    private fun publish() {
+        snapshot = synchronized(stateLock) {
             Snapshot(store.head, store.tail, version, generation, store is SpoolStore)
         }
-        snapshot = next
-    }
-
-    /** Publishes right away (used by clear) so the UI never keeps drawing wiped lines. */
-    private fun publishNow() {
-        synchronized(publishLock) { publishScheduled = true }
-        publisher?.invoke(publishTask) ?: mainHandler.post(publishTask)
-    }
-
-    private fun schedulePublish() {
-        synchronized(publishLock) {
-            if (publishScheduled) return
-            publishScheduled = true
-        }
-        publisher?.invoke(publishTask) ?: mainHandler.postDelayed(publishTask, publishIntervalMs)
     }
 
     // ---- storage ----
@@ -738,6 +719,7 @@ class TerminalBuffer<K : Any>(
         const val TAG = "TerminalBuffer"
         const val ESC = '\u001B'
         const val MAX_ESCAPE = 64
+        const val SLICE_MS = 8L
 
         fun isEscapeComplete(seq: StringBuilder): Boolean {
             if (seq.length > MAX_ESCAPE) return true
