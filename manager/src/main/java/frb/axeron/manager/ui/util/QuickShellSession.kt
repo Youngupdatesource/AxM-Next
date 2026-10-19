@@ -176,23 +176,32 @@ class QuickShellSession(private val application: Application) {
 
     /** TERM to the process group [pgid], which is a command's own session (see class doc). */
     private fun killGroup(pgid: Int) {
+        Thread({ killGroupNow(pgid) }, "QuickShellKill").start()
+    }
+
+    /**
+     * Same as [killGroup], but waits and tells whether anything was still alive in the group:
+     * `kill` fails with "No such process" when the group is empty, so success means a job
+     * had been left behind. Must not run on the main thread.
+     */
+    private fun killGroupNow(pgid: Int): Boolean {
         // Never 0, 1 or -1: that would reach this uid's every process.
-        if (pgid <= 1) return
-        Thread({
-            try {
-                val kill = Axeron.newProcess(
-                    arrayOf("/system/bin/sh", "-c", "kill -s TERM -- -$pgid"),
-                    null,
-                    null
-                )
-                runCatching { kill.outputStream.close() }
-                kill.waitFor()
-                runCatching { kill.inputStream.close() }
-                runCatching { kill.errorStream.close() }
-            } catch (e: Throwable) {
-                Log.w(TAG, "kill $pgid: ${e.message}")
-            }
-        }, "QuickShellKill").start()
+        if (pgid <= 1) return false
+        return try {
+            val kill = Axeron.newProcess(
+                arrayOf("/system/bin/sh", "-c", "kill -s TERM -- -$pgid"),
+                null,
+                null
+            )
+            runCatching { kill.outputStream.close() }
+            val code = kill.waitFor()
+            runCatching { kill.inputStream.close() }
+            runCatching { kill.errorStream.close() }
+            code == 0
+        } catch (e: Throwable) {
+            Log.w(TAG, "kill $pgid: ${e.message}")
+            false
+        }
     }
 
     private fun postError(error: String) {
@@ -383,11 +392,13 @@ class QuickShellSession(private val application: Application) {
             // `$!` also names one that redirected its output and holds nothing open.
             val holdsOutput = out.isAlive || err.isAlive
             val bg = backgroundPid
+            if (DEBUG_BG) postError("[dbg] shell gone: pid=$pid holdsOutput=$holdsOutput bg=$bg restrict=$restrictBackground\n")
             if (holdsOutput || bg > 0) {
                 if (restrictBackground) {
-                    killGroup(pid)
-                    // Only said when something is surely alive; a `$!` alone may be long gone.
-                    if (holdsOutput) postProcess { onBackgroundStopped() }
+                    // Said only when something was surely alive: open output, or a group the
+                    // kill actually reached (a `$!` alone may be long gone).
+                    val killed = killGroupNow(pid)
+                    if (holdsOutput || killed) postProcess { onBackgroundStopped() }
                 } else if (bg > 0) {
                     postProcess { onProcessBackground(intArrayOf(bg)) }
                 }
@@ -420,6 +431,12 @@ class QuickShellSession(private val application: Application) {
 
     private companion object {
         const val TAG = "QuickShellSession"
+
+        /**
+         * Temporary: prints background-detection facts into the terminal. Release builds strip
+         * every android.util.Log call (server/consumer-rules.pro), so logcat shows nothing.
+         */
+        const val DEBUG_BG = true
 
         /** Written to stderr by the command shell's EXIT trap, followed by its `$!`. */
         const val BG_MARK = "__axeron_bg__="

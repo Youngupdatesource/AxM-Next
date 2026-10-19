@@ -56,11 +56,21 @@ class BgTaskTracker(
         pollJob?.cancel()
         scope.launch(Dispatchers.IO) {
             delay(SETTLE_MS)
-            val all = snapshot() ?: return@launch
-            val fresh = all
+            val all = snapshot()
+            if (all == null) {
+                if (DEBUG_BG) onEvent("[dbg] onFinished($pid): ps snapshot unavailable")
+                return@launch
+            }
+            val candidates = all
                 .filter { it.pid != pid }
                 .filter { seen[it.pid] == it.name || it.pgid == pid || it.sid == pid || it.pid in hint }
-                .filter { tracked.putIfAbsent(it.pid, it.name) == null }
+            val fresh = candidates.filter { tracked.putIfAbsent(it.pid, it.name) == null }
+            if (DEBUG_BG) {
+                onEvent(
+                    "[dbg] onFinished($pid): hint=${hint.toList()} procs=${all.size} " +
+                        "candidates=${candidates.map { it.pid }} fresh=${fresh.map { it.pid }}"
+                )
+            }
             seen.clear()
             if (fresh.isNotEmpty()) {
                 onEvent("[bgtask] pid=${fresh.joinToString(",") { it.pid.toString() }}")
@@ -147,6 +157,9 @@ class BgTaskTracker(
 
     private companion object {
         const val TAG = "BgTaskTracker"
+
+        /** Temporary: see QuickShellSession.DEBUG_BG. */
+        const val DEBUG_BG = true
         const val POLL_MS = 1500L
         const val SETTLE_MS = 300L
         const val WATCH_MS = 2000L
