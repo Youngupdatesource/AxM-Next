@@ -11,157 +11,116 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Finds the processes a QuickShell command leaves running behind it (`cmd &`, `nohup ...`,
- * daemons) and follows them until they end, reporting each change through [onEvent] as
- * `[bgtask] pid=...`.
+ * Tells when a QuickShell command left something running behind it (`cmd &`, `nohup ...`) and
+ * when that something ends, reporting each change through [onEvent] as `[bgtask] ...`.
  *
- * Detection combines two sources, because a command can finish faster than it can be polled:
- *  1. while the command runs, its descendants are remembered (pid + name, from the ppid tree);
- *  2. right after it exits, anything alive that is remembered, or that still carries the
- *     command's process group / session id, is a background task.
+ * No process list is read. Every command runs under `setsid` (see QuickShellSession), so its
+ * pid is also its process group id and session id, and everything it started stays in that
+ * group. `kill -0 -- -pgid` succeeds exactly while some member of the group is alive: one exit
+ * status answers "is anything still running?", with no `ps` flags or /proc parsing to get
+ * wrong. (`ps -o NAME` is not accepted by every toybox build; its error went to /dev/null and
+ * the list came back empty, so nothing was ever reported.)
  *
- * Process lists come from `ps` run through the Axeron server, so root and shell mode both work.
+ * The check runs through the Axeron server, as the server is the same uid as the command.
+ * Jobs that start a session of their own (a daemon calling setsid) leave the group and are not
+ * followed.
  */
 class BgTaskTracker(
     private val scope: CoroutineScope,
     private val onEvent: (String) -> Unit,
 ) {
-    private data class Proc(val pid: Int, val ppid: Int, val pgid: Int, val sid: Int, val name: String)
-
-    private val seen = ConcurrentHashMap<Int, String>()
+    /** Command group id -> what was reported for it (the shell's `$!` when it is known). */
     private val tracked = ConcurrentHashMap<Int, String>()
 
-    private var pollJob: Job? = null
     private var watchJob: Job? = null
 
-    /** A command started: remember its descendants while it runs. */
-    fun onStarted(pid: Int) {
-        pollJob?.cancel()
-        seen.clear()
-        pollJob = scope.launch(Dispatchers.IO) {
-            while (isActive) {
-                delay(POLL_MS)
-                val all = snapshot() ?: continue
-                descendants(all, pid).forEach { seen[it.pid] = it.name }
-            }
-        }
-    }
+    /** A command started. Nothing to remember: the group is checked once it has ended. */
+    @Suppress("UNUSED_PARAMETER")
+    fun onStarted(pid: Int) = Unit
 
     /**
-     * The command's own process ended: whatever of its tree is still alive went background.
-     * [hint] are pids the session already knows were started (the shell's `$!`); they count even
-     * when the process tree no longer shows how they are related to the command.
+     * The command's own shell ended: if its group still has live members, they went background.
+     * [hint] are pids the session already knows were started (the shell's `$!`); they only name
+     * the task, liveness always comes from the group.
      */
     fun onFinished(pid: Int, hint: IntArray = IntArray(0)) {
-        pollJob?.cancel()
         scope.launch(Dispatchers.IO) {
             delay(SETTLE_MS)
-            val all = snapshot()
-            if (all == null) {
-                if (DEBUG_BG) onEvent("[dbg] onFinished($pid): ps snapshot unavailable")
-                return@launch
-            }
-            val candidates = all
-                .filter { it.pid != pid }
-                .filter { seen[it.pid] == it.name || it.pgid == pid || it.sid == pid || it.pid in hint }
-            val fresh = candidates.filter { tracked.putIfAbsent(it.pid, it.name) == null }
-            if (DEBUG_BG) {
-                onEvent(
-                    "[dbg] onFinished($pid): hint=${hint.toList()} procs=${all.size} " +
-                        "candidates=${candidates.map { it.pid }} fresh=${fresh.map { it.pid }}"
-                )
-            }
-            seen.clear()
-            if (fresh.isNotEmpty()) {
-                onEvent("[bgtask] pid=${fresh.joinToString(",") { it.pid.toString() }}")
+            val alive = groupAlive(pid)
+            if (DEBUG_BG) onEvent("[dbg] onFinished($pid): hint=${hint.toList()} groupAlive=$alive")
+            if (alive != true) return@launch
+            val label = if (hint.isNotEmpty()) hint.joinToString(",") else "session=$pid"
+            if (tracked.putIfAbsent(pid, label) == null) {
+                onEvent(if (hint.isNotEmpty()) "[bgtask] pid=$label" else "[bgtask] $label")
                 watch()
             }
         }
     }
 
-    /** The command's background jobs were stopped on purpose: stop looking for them. */
-    fun onStopped() {
-        pollJob?.cancel()
-        seen.clear()
-    }
+    /** The command's background jobs were stopped on purpose: nothing to report. */
+    fun onStopped() = Unit
 
-    /** Tells when each background task is gone. Runs only while something is tracked. */
+    /** Tells when each background group is gone. Runs only while something is tracked. */
     private fun watch() {
         if (watchJob?.isActive == true) return
         watchJob = scope.launch(Dispatchers.IO) {
             while (isActive && tracked.isNotEmpty()) {
                 delay(WATCH_MS)
-                val all = snapshot() ?: continue
-                val alive = all.associate { it.pid to it.name }
-                val gone = tracked.filter { (pid, name) -> alive[pid] != name }.keys
-                if (gone.isNotEmpty()) {
-                    gone.forEach { tracked.remove(it) }
-                    onEvent("[bgtask] exited pid=${gone.sorted().joinToString(",")}")
+                for ((group, label) in tracked.entries.toList()) {
+                    // null = could not ask (server gone): keep waiting, do not claim it exited.
+                    if (groupAlive(group) == false) {
+                        tracked.remove(group)
+                        onEvent(
+                            if (label.startsWith("session=")) "[bgtask] exited $label"
+                            else "[bgtask] exited pid=$label"
+                        )
+                    }
                 }
             }
         }
     }
 
     fun close() {
-        pollJob?.cancel()
         watchJob?.cancel()
         tracked.clear()
-        seen.clear()
     }
 
-    private fun descendants(all: List<Proc>, root: Int): List<Proc> {
-        val children = all.groupBy { it.ppid }
-        val out = ArrayList<Proc>()
-        val queue = ArrayDeque<Int>().apply { add(root) }
-        val visited = HashSet<Int>().apply { add(root) }
-        while (queue.isNotEmpty()) {
-            for (child in children[queue.removeFirst()].orEmpty()) {
-                if (!visited.add(child.pid)) continue
-                out += child
-                queue += child.pid
-            }
-        }
-        return out
-    }
-
-    /** One `ps` run; null when the server is unreachable or the output can't be read. */
-    private fun snapshot(): List<Proc>? {
+    /**
+     * True while the process group [pgid] has a live member, false once it is empty, null when
+     * the server could not be asked. The two spellings cover shells that read `-0 --` as an
+     * option error and ones that do not know `-s 0`; either one succeeding means alive.
+     */
+    private fun groupAlive(pgid: Int): Boolean? {
+        // Never 0, 1 or -1: that would be this uid's every process.
+        if (pgid <= 1) return false
         if (!Axeron.pingBinder()) return null
         return try {
-            val process = Axeron.newProcess(
-                arrayOf("sh", "-c", "ps -A -o PID,PPID,PGID,SID,NAME 2>/dev/null"),
+            val check = Axeron.newProcess(
+                arrayOf(
+                    "/system/bin/sh", "-c",
+                    "kill -s 0 -- -$pgid 2>/dev/null || kill -0 -- -$pgid 2>/dev/null"
+                ),
                 null,
                 null
             )
-            val text = try {
-                process.inputStream.bufferedReader().readText()
-            } finally {
-                runCatching { process.destroy() }
-            }
-            text.lineSequence().mapNotNull(::parse).toList().takeIf { it.isNotEmpty() }
+            runCatching { check.outputStream.close() }
+            val code = check.waitFor()
+            runCatching { check.inputStream.close() }
+            runCatching { check.errorStream.close() }
+            code == 0
         } catch (e: Exception) {
-            Log.w(TAG, "ps failed", e)
+            Log.w(TAG, "group check failed", e)
+            if (DEBUG_BG) onEvent("[dbg] group check failed: ${e.javaClass.simpleName}: ${e.message}")
             null
         }
     }
 
-    private fun parse(line: String): Proc? {
-        val parts = line.trim().split(Regex("\\s+"), limit = 5)
-        if (parts.size < 4) return null
-        val pid = parts[0].toIntOrNull() ?: return null // also skips the header
-        val ppid = parts[1].toIntOrNull() ?: return null
-        val pgid = parts[2].toIntOrNull() ?: return null
-        val sid = parts[3].toIntOrNull() ?: return null
-        return Proc(pid, ppid, pgid, sid, parts.getOrElse(4) { "" })
-    }
-
     private companion object {
         const val TAG = "BgTaskTracker"
-
-        /** Temporary: see QuickShellSession.DEBUG_BG. */
-        const val DEBUG_BG = true
-        const val POLL_MS = 1500L
         const val SETTLE_MS = 300L
         const val WATCH_MS = 2000L
+
+        /** Temporary: release builds strip every Log call, so facts go to the terminal. */
+        const val DEBUG_BG = true
     }
 }
