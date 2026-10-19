@@ -384,21 +384,27 @@ open class AxeronService :
     private var deathWatchdog: Process? = null
 
     private fun startDeathWatchdog() {
-        // The igniter's dex, put in the bin dir at activation (functions.sh runs it from there).
-        val dex = File(
+        // The manager's libaxreignite.so (its native lib dir moves with every manager update),
+        // and the same dex put in the bin dir at activation. Which one exists is decided when
+        // the server dies, not now: after a manager update only the bin dex is left.
+        val nativeDex = getManagerApplicationInfo()?.nativeLibraryDir
+            ?.let { File(it, "libaxreignite.so").absolutePath }
+            .orEmpty()
+        val binDex = File(
             PathHelper.getWorkingPath(isRoot, AxeronApiConstant.folder.PARENT_BINARY),
             "ax_reignite.dex"
-        )
+        ).absolutePath
         val script = $$"""
             read -r _
-            [ -f "$1" ] && [ -f "$2" ] || exit 0
-            CLASSPATH="$2" exec /system/bin/app_process / frb.axeron.reignite.Igniter --stop-all
+            [ -f "$1" ] || exit 0
+            if [ -f "$2" ]; then dex="$2"; elif [ -f "$3" ]; then dex="$3"; else exit 0; fi
+            CLASSPATH="$dex" exec /system/bin/app_process / frb.axeron.reignite.Igniter --stop-all
         """.trimIndent()
 
         try {
             deathWatchdog = ProcessBuilder(
                 "/system/bin/sh", "-c", script, "axeron_watchdog",
-                stopPluginsFlagFile.absolutePath, dex.absolutePath
+                stopPluginsFlagFile.absolutePath, nativeDex, binDex
             )
                 .apply {
                     // The server's env (AXERONDIR, AXERONXBIN for the igniter), without a plugin

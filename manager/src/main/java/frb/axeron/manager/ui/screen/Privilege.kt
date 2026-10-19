@@ -50,6 +50,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -112,6 +117,18 @@ fun PrivilegeScreen(
                                     privilegeViewModel.updateShizukuOnly(!privilegeViewModel.shizukuOnly)
                                 }
                             )
+                            DropdownMenuItem(
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .clip(RoundedCornerShape(16.dp)),
+                                text = { Text(stringResource(R.string.privilege_filter_termux)) },
+                                leadingIcon = {
+                                    RoundedCheckbox(checked = privilegeViewModel.termuxOnly)
+                                },
+                                onClick = {
+                                    privilegeViewModel.updateTermuxOnly(!privilegeViewModel.termuxOnly)
+                                }
+                            )
                         }
                     }
                 },
@@ -168,16 +185,48 @@ fun PrivilegeScreen(
 )
                         },
                         trailingContent = {
-                            AxSwitch(
-                                checked = app.isAdded,
-                                onCheckedChange = { checked ->
-                                    if (checked) {
-                                        privilegeViewModel.grant(app.packageInfo.applicationInfo!!.uid)
-                                    } else {
-                                        privilegeViewModel.revoke(app.packageInfo.applicationInfo!!.uid)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                // App terminal (membawa libtermux.so): buka langsung dari sini.
+                                if (app.hasTermuxLib) {
+                                    val context = LocalContext.current
+                                    val failedText = stringResource(R.string.privilege_open_terminal_failed)
+                                    IconButton(
+                                        onClick = {
+                                            val intent = context.packageManager
+                                                .getLaunchIntentForPackage(app.packageName)
+                                            if (intent == null) {
+                                                Toast.makeText(context, failedText, Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                runCatching {
+                                                    context.startActivity(
+                                                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    )
+                                                }.onFailure {
+                                                    Toast.makeText(context, failedText, Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Terminal,
+                                            contentDescription = stringResource(R.string.privilege_open_terminal)
+                                        )
                                     }
                                 }
-                            )
+                                AxSwitch(
+                                    checked = app.isAdded,
+                                    onCheckedChange = { checked ->
+                                        if (checked) {
+                                            privilegeViewModel.grant(app.packageInfo.applicationInfo!!.uid)
+                                        } else {
+                                            privilegeViewModel.revoke(app.packageInfo.applicationInfo!!.uid)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     )
                 }

@@ -53,6 +53,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
+import frb.axeron.manager.ui.theme.sheetContainerColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -202,11 +205,17 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     }
                 },
                 actions = {
+                    // Disabled icons keep the toolbar's own icon colour at 60% (not Material's 38%):
+                    // on the light theme 38% faded stop and clear into the bar and into each other.
+                    val barIconColors = IconButtonDefaults.iconButtonColors(
+                        disabledContentColor = LocalContentColor.current.copy(alpha = 0.6f)
+                    )
                     IconButton(
                         onClick = {
                             viewModel.stop()
                         },
                         enabled = running,
+                        colors = barIconColors,
                     ) {
                         Icon(Icons.Filled.Stop, contentDescription = null)
                     }
@@ -214,7 +223,8 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                         onClick = {
                             viewModel.clear()
                         },
-                        enabled = hasLogs
+                        enabled = hasLogs,
+                        colors = barIconColors,
                     ) {
                         Icon(Icons.Filled.ClearAll, contentDescription = null)
                     }
@@ -469,7 +479,7 @@ fun ExtraSettings(
     if (showDialog) {
         ModalBottomSheet(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+            containerColor = sheetContainerColor(),
             onDismissRequest = onDismissRequest
         ) {
             val context: Context = LocalContext.current

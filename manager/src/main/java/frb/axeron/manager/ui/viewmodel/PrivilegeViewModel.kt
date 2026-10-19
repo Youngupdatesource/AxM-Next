@@ -21,6 +21,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.content.Context
 import android.content.pm.PackageManager
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.zip.ZipFile
 
 class PrivilegeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -30,6 +33,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         private const val MASK_PERMISSION = FLAG_ALLOWED or FLAG_DENIED
         private const val SHIZUKU_PERMISSION = "moe.shizuku.manager.permission.API_V23"
         private const val KEY_SHIZUKU_ONLY = "privilege_shizuku_only"
+        private const val KEY_TERMUX_ONLY = "privilege_termux_only"
 
         private val PRIVILEGE_ORDER = compareByDescending<AppsViewModel.AppInfo> { it.isAdded }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }
@@ -39,7 +43,8 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         val packageInfo: PackageInfo,
         val label: String,
         val isGranted: Boolean,
-        val usesShizuku: Boolean
+        val usesShizuku: Boolean,
+        val hasTermuxLib: Boolean
     )
 
     private val prefs = application.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -52,6 +57,15 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit().putBoolean(KEY_SHIZUKU_ONLY, value).apply()
     }
 
+    /** Hanya tampilkan app yang membawa libtermux.so (terminal berbasis Termux). */
+    var termuxOnly by mutableStateOf(prefs.getBoolean(KEY_TERMUX_ONLY, false))
+        private set
+
+    fun updateTermuxOnly(value: Boolean) {
+        termuxOnly = value
+        prefs.edit().putBoolean(KEY_TERMUX_ONLY, value).apply()
+    }
+
     var isRefreshing: Boolean by mutableStateOf(false)
         private set
 
@@ -60,10 +74,12 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
     val privilegeList by derivedStateOf {
         val currentSearch = search
         val onlyShizuku = shizukuOnly
+        val onlyTermux = termuxOnly
 
         privileges.values.asSequence()
             .filter { it.isNotSystemOrSelf() }
             .filter { !onlyShizuku || it.usesShizuku }
+            .filter { !onlyTermux || it.hasTermuxLib }
             .filter { app ->
                 currentSearch.isEmpty() ||
                         app.label.contains(currentSearch, true) ||
@@ -154,6 +170,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                                 val appInfo = packageInfo.applicationInfo!!
                                 val usesShizuku =
                                     packageInfo.requestedPermissions?.contains(SHIZUKU_PERMISSION) == true
+                                val hasTermuxLib = TermuxLibScanner.has(packageInfo)
                                 packageInfo.requestedPermissions = null
                                 packageInfo.requestedPermissionsFlags = null
                                 LoadedApp(
@@ -161,7 +178,8 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                                     appInfo.loadLabel(pm).toString(),
                                     if (reachableBefore) granted(appInfo.uid)
                                     else previous[appInfo.uid]?.isAdded ?: false,
-                                    usesShizuku
+                                    usesShizuku,
+                                    hasTermuxLib
                                 )
                             }
                         }
@@ -175,7 +193,8 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                         packageInfo = app.packageInfo,
                         isAdded = app.isGranted,
                         pinyin = appSearchPinyin(app.label),
-                        usesShizuku = app.usesShizuku
+                        usesShizuku = app.usesShizuku,
+                        hasTermuxLib = app.hasTermuxLib
                     )
                 }
             }
@@ -190,5 +209,51 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
             }
             isRefreshing = false
         }
+    }
+}
+
+/**
+ * Apakah sebuah app membawa libtermux.so (terminal berbasis Termux).
+ *
+ * Dicek dulu di folder native yang sudah diekstrak (murah), lalu di dalam APK dan split-nya:
+ * app modern sering memasang lib tanpa ekstrak (extractNativeLibs=false), jadi foldernya kosong
+ * dan lib hanya ada di dalam zip. Hanya daftar isi zip yang dibaca. Hasil disimpan per paket
+ * dan dibuang saat app diperbarui (lastUpdateTime berubah), jadi refresh tidak memindai ulang.
+ */
+private object TermuxLibScanner {
+    private const val LIB_NAME = "libtermux.so"
+    private val cache = ConcurrentHashMap<String, Pair<Long, Boolean>>()
+
+    fun has(info: PackageInfo): Boolean {
+        val app = info.applicationInfo ?: return false
+        cache[info.packageName]?.let { (stamp, found) ->
+            if (stamp == info.lastUpdateTime) return found
+        }
+        val found = scan(app)
+        cache[info.packageName] = info.lastUpdateTime to found
+        return found
+    }
+
+    private fun scan(app: ApplicationInfo): Boolean {
+        val libDir = app.nativeLibraryDir
+        if (libDir != null && File(libDir, LIB_NAME).exists()) return true
+        val apks = ArrayList<String>()
+        app.sourceDir?.let { apks.add(it) }
+        app.splitSourceDirs?.let { apks.addAll(it) }
+        return apks.any { containsLib(it) }
+    }
+
+    private fun containsLib(apkPath: String): Boolean = try {
+        ZipFile(apkPath).use { zip ->
+            val entries = zip.entries()
+            var found = false
+            while (!found && entries.hasMoreElements()) {
+                val name = entries.nextElement().name
+                found = name.startsWith("lib/") && name.endsWith("/$LIB_NAME")
+            }
+            found
+        }
+    } catch (_: Exception) {
+        false
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import frb.axeron.manager.ui.component.prefetchPluginBanners
 import frb.axeron.api.Axeron
 import frb.axeron.manager.AxeronApplication.Companion.axeronApp
 import frb.axeron.manager.ui.util.HanziToPinyin
@@ -145,6 +146,11 @@ class PluginViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 val loadCost = SystemClock.elapsedRealtime() - start
+                // Banners are decoded now, not when each card first scrolls into view.
+                val loaded = plugins
+                viewModelScope.launch(Dispatchers.IO) {
+                    runCatching { prefetchPluginBanners(getApplication<Application>(), loaded) }
+                }
                 Log.i(TAG, "load cost: $loadCost, modules: $plugins")
 
                 // when both old and new is kotlin.collections.EmptyList

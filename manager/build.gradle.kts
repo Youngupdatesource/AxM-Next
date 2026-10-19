@@ -101,6 +101,8 @@ dependencies {
     implementation(project(":provider"))
     implementation(project(":server-shared"))
     implementation(project(":axerish"))
+    // libaxreignite.so: the plugin igniter, run from the manager's native lib dir.
+    implementation(project(":reignite"))
     implementation(libs.sdp.android)
     implementation(libs.material)
     implementation(libs.mmrl.ui)
@@ -113,4 +115,10 @@ dependencies {
     implementation(libs.sheet.compose.dialogs.input)
 
     implementation(libs.androidx.work.runtime.ktx)
+}
+
+// scripts/ax_reignite.dex is rebuilt from :reignite on every build, so the asset can never be
+// older than libaxreignite.so (it was a prebuilt file nobody regenerated).
+tasks.matching { it.name.matches(Regex("merge\\w*Assets")) }.configureEach {
+    dependsOn(":reignite:igniterAsset")
 }

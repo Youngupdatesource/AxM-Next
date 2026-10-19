@@ -59,6 +59,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import frb.axeron.manager.ui.component.CachedBannerImage
+import frb.axeron.manager.ui.component.PluginBannerBytes
+import frb.axeron.manager.ui.component.pluginBannerKey
+import frb.axeron.manager.ui.component.readPluginBannerBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.produceState
@@ -356,7 +359,7 @@ fun PluginItem(
                     contentAlignment = Alignment.Center
                 ) {
                     val isRemote = plugin.prop.banner.startsWith("http", true)
-                    val bannerKey = "plugin_banner:${plugin.prop.id}:${plugin.prop.banner}"
+                    val bannerKey = pluginBannerKey(plugin)
                     // Baca file banner sekali, di luar main thread, dan simpan di memori proses.
                     // Sebelumnya dibaca lewat Binder di main thread setiap item masuk komposisi.
                     val bannerData by produceState<Any?>(
@@ -368,22 +371,8 @@ fun PluginItem(
                             value = plugin.prop.banner
                         } else if (value == null) {
                             value = withContext(Dispatchers.IO) {
-                                try {
-                                    val path = File(
-                                        PathHelper.getWorkingPath(
-                                            Axeron.getAxeronInfo().isRoot(),
-                                            AxeronApiConstant.folder.PARENT_PLUGIN
-                                        ),
-                                        plugin.prop.id
-                                    )
-                                    val bannerFile = File(path, plugin.prop.banner)
-                                    Axeron.newFileService()
-                                        .setFileInputStream(bannerFile.absolutePath)
-                                        ?.use { it.readBytes() }
-                                        ?.also { PluginBannerBytes.put(bannerKey, it) }
-                                } catch (_: Exception) {
-                                    null
-                                }
+                                readPluginBannerBytes(plugin)
+                                    ?.also { PluginBannerBytes.put(bannerKey, it) }
                             }
                         }
                     }
@@ -777,14 +766,4 @@ fun PluginItem(
             }
         }
     }
-}
-
-/** Bytes banner plugin yang sudah dibaca, supaya tidak di-IPC ulang tiap tab dibuka. */
-private object PluginBannerBytes {
-    private val cache = object : android.util.LruCache<String, ByteArray>(8 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: ByteArray): Int = value.size
-    }
-
-    fun get(key: String): ByteArray? = synchronized(this) { cache.get(key) }
-    fun put(key: String, value: ByteArray) = synchronized(this) { cache.put(key, value) }
 }

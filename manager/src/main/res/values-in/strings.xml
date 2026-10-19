@@ -219,6 +219,9 @@
     <string name="kernel_version">Kernel</string>
     <string name="privilege_filter">Filter</string>
     <string name="privilege_filter_shizuku">Hanya app dengan Shizuku API</string>
+    <string name="privilege_filter_termux">Hanya app dengan libtermux.so</string>
+    <string name="privilege_open_terminal">Buka terminal</string>
+    <string name="privilege_open_terminal_failed">Tidak bisa membuka aplikasi ini</string>
     <string name="shortcut_name">Nama pintasan</string>
     <string name="shortcut_icon">Ikon pintasan</string>
     <string name="shortcut_icon_default">Bawaan</string>

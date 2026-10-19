@@ -436,7 +436,7 @@ class QuickShellSession(private val application: Application) {
          * Temporary: prints background-detection facts into the terminal. Release builds strip
          * every android.util.Log call (server/consumer-rules.pro), so logcat shows nothing.
          */
-        const val DEBUG_BG = true
+        const val DEBUG_BG = false
 
         /** Written to stderr by the command shell's EXIT trap, followed by its `$!`. */
         const val BG_MARK = "__axeron_bg__="

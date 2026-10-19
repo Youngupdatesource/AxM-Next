@@ -129,3 +129,17 @@ fun capsuleContainerColor(): Color {
         scheme.surfaceContainerHighest
     }
 }
+
+/**
+ * Warna latar bottom sheet. Di tema gelap diturunkan dari warna kartu (sedikit lebih gelap, sama
+ * seperti kapsul nav), jadi tetap kebiruan seperti kartu dan latar lain. surfaceContainerLowest
+ * dari palet dinamis hampir netral-hitam, sehingga sheet terlihat lebih hitam daripada layar
+ * di belakangnya. Kartu di dalam sheet tetap terlihat karena lebih terang dari sheet.
+ * Tema terang tetap memakai surfaceContainerLowest.
+ */
+@Composable
+fun sheetContainerColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.background.luminance() < 0.5f) capsuleContainerColor()
+    else scheme.surfaceContainerLowest
+}

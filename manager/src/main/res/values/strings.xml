@@ -219,6 +219,9 @@
     <string name="kernel_version">Kernel</string>
     <string name="privilege_filter">Filter</string>
     <string name="privilege_filter_shizuku">Shizuku API apps only</string>
+    <string name="privilege_filter_termux">Apps with libtermux.so only</string>
+    <string name="privilege_open_terminal">Open terminal</string>
+    <string name="privilege_open_terminal_failed">Can’t open this app</string>
     <string name="shortcut_name">Shortcut name</string>
     <string name="shortcut_icon">Shortcut icon</string>
     <string name="shortcut_icon_default">Default</string>

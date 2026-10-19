@@ -122,16 +122,6 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
         contract = ActivityResultContracts.StartActivityForResult()
     ) { pluginViewModel.fetchModuleList() }
 
-    var showExtraDialog by remember { mutableStateOf(false) }
-
-    ExtraFilterSettings(
-        showExtraDialog,
-        settingsViewModel,
-        pluginViewModel
-    ) {
-        showExtraDialog = false
-    }
-
     Scaffold(
         topBar = {
             SearchAppBar(
@@ -146,16 +136,7 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
                 searchText = pluginViewModel.search,
                 onSearchTextChange = { pluginViewModel.search = it },
                 onClearClick = { pluginViewModel.search = "" },
-                scrollBehavior = scrollBehavior,
-                action = {
-                    IconButton(
-                        onClick = {
-                            showExtraDialog = true
-                        })
-                    {
-                        Icon(Icons.Outlined.MoreVert, null)
-                    }
-                }
+                scrollBehavior = scrollBehavior
             )
         },
         floatingActionButton = {
@@ -293,123 +274,6 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
         )
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ExtraFilterSettings(
-    showDialog: Boolean,
-    settingsViewModel: SettingsViewModel,
-    pluginViewModel: PluginViewModel,
-    onDismissRequest: () -> Unit
-) {
-    if (showDialog) {
-        ModalBottomSheet(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-            onDismissRequest = onDismissRequest
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val ascOption = listOf(R.string.ascending, R.string.descending)
-                val sortOption = listOf(
-                    R.string.name, R.string.size,
-                    R.string.enable, R.string.action, R.string.web_ui
-                )
-
-                SettingsItem(
-                    label = stringResource(R.string.filter_settings),
-                    iconVector = Icons.Outlined.FilterAlt
-                ) { enabled, checked ->
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 12.dp)
-                    ) {
-                        SingleChoiceSegmentedButtonRow {
-                            ascOption.forEachIndexed { index, labelId ->
-                                SegmentedButton(
-                                    colors = SegmentedButtonDefaults.colors().copy(
-                                        inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                        inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    icon = {},
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = ascOption.size,
-                                        baseShape = SegmentedButtonDefaults.baseShape.copy(
-                                            bottomStart = CornerSize(6.dp),
-                                            bottomEnd = CornerSize(6.dp),
-                                            topStart = CornerSize(6.dp),
-                                            topEnd = CornerSize(6.dp)
-                                        )
-                                    ),
-                                    onClick = { pluginViewModel.setSelectedAsc(index) },
-                                    selected = index == pluginViewModel.getSelectedAsc,
-                                    label = {
-                                        Text(
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Normal,
-                                            text = stringResource(labelId)
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.padding(2.dp))
-
-                        SingleChoiceSegmentedButtonRow {
-                            sortOption.forEachIndexed { index, labelId ->
-                                SegmentedButton(
-                                    colors = SegmentedButtonDefaults.colors().copy(
-                                        inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                        inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    icon = {},
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = sortOption.size,
-                                        baseShape = SegmentedButtonDefaults.baseShape.copy(
-                                            bottomStart = CornerSize(6.dp),
-                                            bottomEnd = CornerSize(6.dp),
-                                            topStart = CornerSize(6.dp),
-                                            topEnd = CornerSize(6.dp)
-                                        )
-                                    ),
-                                    onClick = { pluginViewModel.setSelectedSort(index) },
-                                    selected = index == pluginViewModel.getSelectedSort,
-                                    label = {
-                                        Text(
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Normal,
-                                            text = stringResource(labelId)
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                }
-
-                SettingsItem(
-                    iconVector = Icons.Filled.DeveloperMode,
-                    label = stringResource(R.string.enable_developer_mode),
-                    description = stringResource(R.string.enable_developer_mode_msg),
-                    checked = settingsViewModel.isDeveloperModeEnabled,
-                    onSwitchChange = {
-                        settingsViewModel.setDeveloperOptions(it)
-                    }
-                )
-            }
-        }
-    }
-}
-
 
 val dummyPlugin = PluginInfo()
 

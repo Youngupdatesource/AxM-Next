@@ -121,6 +121,6 @@ class BgTaskTracker(
         const val WATCH_MS = 2000L
 
         /** Temporary: release builds strip every Log call, so facts go to the terminal. */
-        const val DEBUG_BG = true
+        const val DEBUG_BG = false
     }
 }

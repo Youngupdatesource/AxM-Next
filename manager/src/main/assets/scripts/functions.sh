@@ -173,7 +173,11 @@ reset_manager() {
       touch "$plugin/remove"
   done
 
-  export CLASSPATH="${AXERONBIN}/ax_reignite.dex";
+  if [ -f "${AXERONLIB}/libaxreignite.so" ]; then
+    export CLASSPATH="${AXERONLIB}/libaxreignite.so";
+  else
+    export CLASSPATH="${AXERONBIN}/ax_reignite.dex";
+  fi
   app_process / frb.axeron.reignite.Igniter "$debug"
 
   rm -rf "$AXERONDIR"
@@ -195,7 +199,11 @@ uninstall_axmanager() {
       touch "$plugin/remove"
   done
 
-  export CLASSPATH="${AXERONBIN}/ax_reignite.dex";
+  if [ -f "${AXERONLIB}/libaxreignite.so" ]; then
+    export CLASSPATH="${AXERONLIB}/libaxreignite.so";
+  else
+    export CLASSPATH="${AXERONBIN}/ax_reignite.dex";
+  fi
   app_process / frb.axeron.reignite.Igniter "$debug"
 
   rm -rf "$AXERONDIR"
