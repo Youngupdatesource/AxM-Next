@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import frb.axeron.api.Axeron
+import frb.axeron.server.Environment
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.Closeable
@@ -132,8 +133,8 @@ class QuickShellSession(private val application: Application) {
      * The one place that reads the server's environment (AXERONDIR, PATH with the plugin xbin,
      * user env). Direct call on purpose: the manager is minified, reflection would break.
      */
-    private fun serverEnv(): Array<String>? = try {
-        Axeron.getEnvironment()?.getEnv()
+    private fun serverEnv(): Environment? = try {
+        Axeron.getEnvironment()
     } catch (e: Throwable) {
         Log.w(TAG, "no server env: ${e.message}")
         null
