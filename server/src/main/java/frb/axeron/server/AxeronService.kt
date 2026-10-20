@@ -91,6 +91,7 @@ open class AxeronService :
         @JvmStatic
         fun main(args: Array<String>) {
             DdmHandleAppName.setAppName("axeron_server", 0)
+            ensureCacheDir(android.os.Process.myUid() == 0)
             RishConfig.setLibraryPath(System.getProperty("axeron.library.path"))
             PtyHost.setLibraryPath(System.getProperty("axeron.library.path"))
             runCatching { PtyHost.loadLibrary() }
@@ -100,6 +101,13 @@ open class AxeronService :
             Looper.prepareMainLooper()
             AxeronService()
             Looper.loop()
+        }
+
+        private fun ensureCacheDir(isRoot: Boolean) {
+            val cache = PathHelper.getWorkingPath(isRoot, AxeronApiConstant.folder.PARENT_CACHE)
+            if (!cache.isDirectory && !cache.mkdirs()) {
+                LOGGER.w("can't create %s, plugins get a missing TMPDIR", cache)
+            }
         }
 
         fun waitSystemService(name: String) {

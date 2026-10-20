@@ -218,6 +218,8 @@ uninstall_axmanager() {
 
 install_plugin() {
   local AUTO_ENABLE=$1
+  [ -n "$TMPDIR" ] || abort "! TMPDIR is not set"
+  TMPDIR="$TMPDIR/install"
   rm -rf "$TMPDIR"
   mkdir -p "$TMPDIR"
   cd "$TMPDIR" || exit

@@ -26,13 +26,18 @@ import com.google.gson.ToNumberPolicy
 import frb.axeron.api.Axeron
 import frb.axeron.api.AxeronPluginService
 import frb.axeron.server.util.flattenOneLevel
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.runInterruptible
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.CompletableFuture
 
 /**
  * Unrooted by FahrezONE
@@ -49,12 +54,18 @@ class KsuWebInterface(
     val pluginBin: String
         get() = "${modDir.absolutePath}/system/bin"
 
+    private val scope: CoroutineScope =
+        (context as? LifecycleOwner)?.lifecycleScope ?: CoroutineScope(SupervisorJob())
+
+    private val pluginMarker: String
+        get() = "export AXERON_PLUGIN='${modDir.name}';"
+
     @JavascriptInterface
     fun exec(cmd: String): String {
         return runCatching {
             runBlocking(Dispatchers.IO) {
                 val result = AxeronPluginService.execWithIO(
-                    cmd = cmd,
+                    cmd = pluginMarker + cmd,
                     useBusybox = false,
                     hideStderr = false
                 )
@@ -76,6 +87,8 @@ class KsuWebInterface(
             JSONObject(options)
         }
 
+        sb.append(pluginMarker)
+
         val cwd = opts.optString("cwd")
         if (!TextUtils.isEmpty(cwd)) {
             sb.append("cd ${cwd};")
@@ -95,15 +108,12 @@ class KsuWebInterface(
         options: String?,
         callbackFunc: String
     ) {
-        runBlocking(Dispatchers.IO) {
-            val finalCommand = buildString {
-                processOptions(this, options)
-                append(cmd)
-            }
-//            val finalCommand = StringBuilder()
-//            processOptions(finalCommand, options)
-//            finalCommand.append(cmd)
+        val finalCommand = buildString {
+            processOptions(this, options)
+            append(cmd)
+        }
 
+        scope.launch(Dispatchers.IO) {
             val result = AxeronPluginService.execWithIO(
                 cmd = finalCommand,
                 useBusybox = false,
@@ -124,36 +134,23 @@ class KsuWebInterface(
 
     @JavascriptInterface
     fun spawn(command: String, args: String, options: String?, callbackFunc: String) {
-        runBlocking(Dispatchers.IO) {
-            val finalCommand = buildString {
-                processOptions(this, options)
+        val finalCommand = buildString {
+            processOptions(this, options)
 
-                if (!TextUtils.isEmpty(args)) {
-                    append(command).append(" ")
-                    JSONArray(args).let { argsArray ->
-                        for (i in 0 until argsArray.length()) {
-                            append(argsArray.getString(i))
-                            append(" ")
-                        }
+            if (!TextUtils.isEmpty(args)) {
+                append(command).append(" ")
+                JSONArray(args).let { argsArray ->
+                    for (i in 0 until argsArray.length()) {
+                        append(argsArray.getString(i))
+                        append(" ")
                     }
-                } else {
-                    append(command)
                 }
+            } else {
+                append(command)
             }
+        }
 
-//            val finalCommand = StringBuilder()
-//            processOptions(finalCommand, options)
-//            if (!TextUtils.isEmpty(args)) {
-//                finalCommand.append(command).append(" ")
-//                JSONArray(args).let { argsArray ->
-//                    for (i in 0 until argsArray.length()) {
-//                        finalCommand.append(argsArray.getString(i)).append(" ")
-//                    }
-//                }
-//            } else {
-//                finalCommand.append(command)
-//            }
-
+        scope.launch(Dispatchers.IO) {
             val emitData = fun(name: String, data: String) {
                 val jsCode =
                     "(function() { try { ${callbackFunc}.${name}.emit('data', ${
@@ -173,28 +170,24 @@ class KsuWebInterface(
                 useBusybox = false,
                 hideStderr = false
             )
-            val completableFuture = CompletableFuture.supplyAsync {
-                future.get()
+            val result = runInterruptible { future.get() }
+
+            if (result.code != 0) {
+                val emitErrCode =
+                    "(function() { try { var err = new Error(); err.exitCode = ${result.code}; err.message = ${
+                        JSONObject.quote(
+                            result.err + "\n"
+                        )
+                    };${callbackFunc}.emit('error', err); } catch(e) { console.error('emitErr', e); } })();"
+                webView.post {
+                    webView.evaluateJavascript(emitErrCode, null)
+                }
             }
 
-            completableFuture.thenAccept { result ->
-                val emitExitCode =
-                    "(function() { try { ${callbackFunc}.emit('exit', ${result.code}); } catch(e) { console.error(`emitExit error: \${e}`); } })();"
-                webView.post {
-                    webView.evaluateJavascript(emitExitCode, null)
-                }
-
-                if (result.code != 0) {
-                    val emitErrCode =
-                        "(function() { try { var err = new Error(); err.exitCode = ${result.code}; err.message = ${
-                            JSONObject.quote(
-                                result.err + "\n"
-                            )
-                        };${callbackFunc}.emit('error', err); } catch(e) { console.error('emitErr', e); } })();"
-                    webView.post {
-                        webView.evaluateJavascript(emitErrCode, null)
-                    }
-                }
+            val emitExitCode =
+                "(function() { try { ${callbackFunc}.emit('exit', ${result.code}); } catch(e) { console.error(`emitExit error: \${e}`); } })();"
+            webView.post {
+                webView.evaluateJavascript(emitExitCode, null)
             }
         }
     }

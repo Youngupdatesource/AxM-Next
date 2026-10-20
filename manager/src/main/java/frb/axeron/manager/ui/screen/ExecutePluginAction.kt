@@ -108,7 +108,7 @@ fun ExecutePluginActionScreen(
                 ), plugin.dirId
             )
             val pluginBin = "${pluginPath.absolutePath}/system/bin"
-            val cmd =
+            val cmd = "export AXERON_PLUGIN='${plugin.dirId}'; " +
                 $$"export PATH=$$pluginBin:$PATH; cd \"$$pluginPath\"; sh ./action.sh; RES=$?; cd /; exit $RES"
             AxeronPluginService.execWithIO(
                 cmd = cmd,
