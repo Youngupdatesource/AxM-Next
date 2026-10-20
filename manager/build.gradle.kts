@@ -101,6 +101,7 @@ dependencies {
     implementation(project(":provider"))
     implementation(project(":server-shared"))
     implementation(project(":axerish"))
+    implementation(project(":axsh"))
     // libaxreignite.so: the plugin igniter, run from the manager's native lib dir.
     implementation(project(":reignite"))
     implementation(libs.sdp.android)

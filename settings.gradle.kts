@@ -32,6 +32,7 @@ include(":server")
 include(":adb")
 include(":server:stub")
 include(":reignite")
+include(":axsh")
 
 var root = "api"
 

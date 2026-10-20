@@ -11,12 +11,14 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.UserInfo
 import android.ddm.DdmHandleAppName
+import android.os.Binder
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.IPowerManager
 import android.os.Looper
 import android.os.Parcel
+import android.os.ParcelFileDescriptor
 import android.os.Parcelable
 import android.os.RemoteException
 import android.os.SELinux
@@ -26,6 +28,11 @@ import android.os.UserHandle
 import android.os.UserHandleHidden
 import android.system.Os
 import dev.rikka.tools.refine.Refine
+import frb.axeron.axsh.AxshConstants
+import frb.axeron.axsh.IAxshLauncher
+import frb.axeron.axsh.IAxshProcess
+import frb.axeron.axsh.host.AxshProcess
+import frb.axeron.axsh.host.PtyHost
 import frb.axeron.server.ServerConstants.MANAGER_APPLICATION_ID
 import frb.axeron.server.ServerConstants.PERMISSION
 import frb.axeron.server.ServerConstants.SHIZUKU_MANAGER_APPLICATION_ID
@@ -68,6 +75,7 @@ import rikka.rish.RishConfig
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 
@@ -84,6 +92,9 @@ open class AxeronService :
         fun main(args: Array<String>) {
             DdmHandleAppName.setAppName("axeron_server", 0)
             RishConfig.setLibraryPath(System.getProperty("axeron.library.path"))
+            PtyHost.setLibraryPath(System.getProperty("axeron.library.path"))
+            runCatching { PtyHost.loadLibrary() }
+                .onFailure { LOGGER.w("libaxsh_host.so not loaded: $it") }
 
             @Suppress("DEPRECATION")
             Looper.prepareMainLooper()
@@ -906,6 +917,70 @@ open class AxeronService :
     }
 
 
+    private val axshLauncher = object : IAxshLauncher.Stub() {
+
+        override fun getEnvironment(): Array<String>? =
+            this@AxeronService.getEnvironment(TYPE_ENV)?.getEnv()
+
+        override fun newAxshProcess(
+            cmd: Array<out String?>?,
+            env: Array<out String?>?,
+            stdin: ParcelFileDescriptor?,
+            stdout: ParcelFileDescriptor?,
+            stderr: ParcelFileDescriptor?,
+            pty: Boolean,
+            size: Long,
+            status: ParcelFileDescriptor?
+        ): IAxshProcess {
+            var lease: WakeLockController.Lease? = null
+            try {
+                enforceCallingPermission("newAxshProcess")
+
+                val argv = cmd?.filterNotNull()?.toTypedArray()
+                require(!argv.isNullOrEmpty()) { "empty command" }
+                requireNotNull(stdin) { "stdin" }
+                requireNotNull(stdout) { "stdout" }
+
+                val uid = Binder.getCallingUid()
+                LOGGER.d(
+                    "newAxshProcess: uid=%d, pty=%s, cmd=%s",
+                    uid,
+                    pty.toString(),
+                    argv.contentToString()
+                )
+
+                if (wakeLockMode != WakeLockMode.NEVER) {
+                    lease = wakeLock.acquire("newAxshProcess:uid=$uid")
+                }
+                val owner = clientManager.findClient(uid, Binder.getCallingPid())
+                    ?.client?.asBinder()
+                val process = AxshProcess.start(
+                    argv, env?.filterNotNull()?.toTypedArray(), null,
+                    stdin, stdout, stderr, pty, size, status, owner
+                )
+                lease?.let { held ->
+                    thread(name = "axsh-lease", isDaemon = true) {
+                        try {
+                            process.waitFor()
+                        } finally {
+                            held.close()
+                        }
+                    }
+                }
+                return process
+            } catch (e: Throwable) {
+                lease?.close()
+                for (fd in arrayOf(stdin, stdout, stderr, status)) {
+                    try {
+                        fd?.close()
+                    } catch (_: Exception) {
+                    }
+                }
+                throw e
+            }
+        }
+    }
+
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         if (wakeLockMode == WakeLockMode.ADAPTIVE && code in IBinder.FIRST_CALL_TRANSACTION..IBinder.LAST_CALL_TRANSACTION) {
             wakeLock.touch("client", CLIENT_ACTIVITY_TTL_MS)
@@ -916,6 +991,12 @@ open class AxeronService :
             val result: ParcelableListSlice<PackageInfo?> = getApplications(userId)
             reply!!.writeNoException()
             result.writeToParcel(reply, Parcelable.PARCELABLE_WRITE_RETURN_VALUE)
+            return true
+        }
+        if (code == AxshConstants.TRANSACTION_GET_LAUNCHER) {
+            data.enforceInterface(BINDER_DESCRIPTOR)
+            reply!!.writeNoException()
+            reply.writeStrongBinder(axshLauncher)
             return true
         }
         return super.onTransact(code, data, reply, flags)

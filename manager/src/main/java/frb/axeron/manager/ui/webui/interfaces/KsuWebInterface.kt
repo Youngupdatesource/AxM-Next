@@ -3,6 +3,7 @@ package frb.axeron.manager.ui.webui.interfaces
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
@@ -241,9 +242,24 @@ class KsuWebInterface(
             .toJson(currentModuleInfo)
     }
 
+    @Suppress("DEPRECATION")
+    private fun loadPackages(): List<PackageInfo> {
+        val fromServer = try {
+            Axeron.getPackages(0)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        if (fromServer.isNotEmpty()) return fromServer
+        return try {
+            context.packageManager.getInstalledPackages(0)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
     @JavascriptInterface
     fun listPackages(type: String): String {
-        val packageNames = Axeron.getPackages(0)
+        val packageNames = loadPackages()
             .filter { packageInfo ->
                 val flags = packageInfo.applicationInfo?.flags ?: 0
                 when (type.lowercase()) {
@@ -265,7 +281,7 @@ class KsuWebInterface(
     @JavascriptInterface
     fun listSystemPackages(): String {
 //        val pm = context.packageManager
-        val packages = Axeron.getPackages(0).mapNotNull { pkg ->
+        val packages = loadPackages().mapNotNull { pkg ->
             val appInfo = pkg.applicationInfo
             if (appInfo != null && (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) {
                 pkg.packageName
@@ -282,7 +298,7 @@ class KsuWebInterface(
     @JavascriptInterface
     fun listUserPackages(): String {
 //        val pm = context.packageManager
-        val packages = Axeron.getPackages(0)
+        val packages = loadPackages()
             .mapNotNull { pkg ->
                 val appInfo = pkg.applicationInfo
                 if (appInfo != null && (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0) {
@@ -300,7 +316,7 @@ class KsuWebInterface(
     @JavascriptInterface
     fun listAllPackages(): String {
 //        val pm = context.packageManager
-        val packages = Axeron.getPackages(0)
+        val packages = loadPackages()
             .map { it.packageName }.sorted()
         val jsonArray = JSONArray()
         for (pkgName in packages) {
@@ -314,7 +330,7 @@ class KsuWebInterface(
         val pm = context.packageManager
         val packageNames = JSONArray(packageNamesJson)
         val jsonArray = JSONArray()
-        val appMap = Axeron.getPackages(0).associateBy { it.packageName }
+        val appMap = loadPackages().associateBy { it.packageName }
         for (i in 0 until packageNames.length()) {
             val pkgName = packageNames.getString(i)
             val appInfo = appMap[pkgName]
@@ -324,7 +340,7 @@ class KsuWebInterface(
                 obj.put("packageName", appInfo.packageName)
                 obj.put("versionName", appInfo.versionName ?: "")
                 obj.put("versionCode", PackageInfoCompat.getLongVersionCode(appInfo))
-                obj.put("appLabel", app?.loadLabel(pm).toString())
+                obj.put("appLabel", app?.loadLabel(pm)?.toString() ?: pkgName)
                 obj.put("isSystem", if (app != null) ((app.flags and ApplicationInfo.FLAG_SYSTEM) != 0) else JSONObject.NULL)
                 obj.put("uid", app?.uid ?: JSONObject.NULL)
                 jsonArray.put(obj)
@@ -369,7 +385,7 @@ class KsuWebInterface(
 
     @JavascriptInterface
     fun cacheAllPackageIcons(size: Int) {
-        val packages = Axeron.getPackages(0)
+        val packages = loadPackages()
         val out = ByteArrayOutputStream()
         var warmed = 0
         for (pkg in packages) {

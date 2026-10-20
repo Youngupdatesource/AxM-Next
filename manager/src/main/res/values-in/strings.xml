@@ -222,6 +222,8 @@
     <string name="privilege_filter_termux">Hanya app dengan libtermux.so</string>
     <string name="privilege_open_terminal">Buka terminal</string>
     <string name="privilege_open_terminal_failed">Tidak bisa membuka aplikasi ini</string>
+    <string name="privilege_axsh_copied">Perintah disalin. Tempel di terminal</string>
+    <string name="privilege_axsh_not_ready">Aktifkan layanan AxManager dulu</string>
     <string name="shortcut_name">Nama pintasan</string>
     <string name="shortcut_icon">Ikon pintasan</string>
     <string name="shortcut_icon_default">Bawaan</string>

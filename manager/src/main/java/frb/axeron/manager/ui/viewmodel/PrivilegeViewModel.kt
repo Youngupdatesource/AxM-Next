@@ -78,8 +78,14 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
 
         privileges.values.asSequence()
             .filter { it.isNotSystemOrSelf() }
-            .filter { !onlyShizuku || it.usesShizuku }
-            .filter { !onlyTermux || it.hasTermuxLib }
+            .filter {
+                when {
+                    onlyShizuku && onlyTermux -> it.usesShizuku || it.hasTermuxLib
+                    onlyShizuku -> it.usesShizuku
+                    onlyTermux -> it.hasTermuxLib
+                    else -> true
+                }
+            }
             .filter { app ->
                 currentSearch.isEmpty() ||
                         app.label.contains(currentSearch, true) ||

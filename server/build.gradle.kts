@@ -55,6 +55,7 @@ dependencies {
     implementation(project(":api"))
     implementation(project(":provider"))
     implementation(project(":rish"))
+    implementation(project(":axsh"))
     implementation(project(":server-shared"))
     compileOnly(project(":server:stub"))
 }

@@ -99,8 +99,21 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           chmod +x gradlew
-          ./gradlew :manager:assemble${{ inputs.build_type }} --stacktrace
+          ./gradlew :manager:assemble${{ inputs.build_type }} --stacktrace 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: AxM-Next-build-log
+          path: |
+            build.log
+            **/build/reports/**
+            **/.cxx/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
