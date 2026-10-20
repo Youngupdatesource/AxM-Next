@@ -22,11 +22,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import frb.axeron.manager.R
+import frb.axeron.manager.data.AxshLauncher
 import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.viewmodel.AppsViewModel
 
@@ -83,6 +85,33 @@ fun TerminalAppDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+
+                Text(
+                    text = stringResource(R.string.privilege_terminal_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = AxshLauncher.RUN_COMMAND,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+
+                if (!showRootless) {
+                    Text(
+                        text = stringResource(R.string.privilege_terminal_mode_adb),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 if (showRootless) {

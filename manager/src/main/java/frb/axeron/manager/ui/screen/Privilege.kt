@@ -52,7 +52,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import android.widget.Toast
 import frb.axeron.manager.ui.component.TerminalAppDialog
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Terminal
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -209,8 +209,8 @@ fun PrivilegeScreen(
 
                                     IconButton(onClick = { showSettings = true }) {
                                         Icon(
-                                            imageVector = Icons.Outlined.Settings,
-                                            contentDescription = stringResource(R.string.privilege_app_settings)
+                                            imageVector = Icons.Outlined.Terminal,
+                                            contentDescription = stringResource(R.string.privilege_open_terminal)
                                         )
                                     }
 
