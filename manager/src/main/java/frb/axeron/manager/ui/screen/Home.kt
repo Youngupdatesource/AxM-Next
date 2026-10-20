@@ -781,7 +781,13 @@ fun WarningCard(
 @Composable
 fun InfoCard(activateViewModel: ActivateViewModel) {
     val axeronInfo = activateViewModel.axeronInfo
-    val kernel = remember { System.getProperty("os.version").orEmpty().ifBlank { "-" } }
+    val kernel = remember {
+        System.getProperty("os.version").orEmpty()
+            .split('-')
+            .take(3)
+            .joinToString("-")
+            .ifBlank { "-" }
+    }
 
     Card(
         shape = MaterialTheme.shapes.medium,

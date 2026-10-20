@@ -51,6 +51,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import android.widget.Toast
+import frb.axeron.manager.ui.component.TerminalAppDialog
+import androidx.compose.material.icons.outlined.Settings
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +63,6 @@ import android.content.ClipboardManager
 import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -200,45 +201,59 @@ fun PrivilegeScreen(
                                 if (app.hasTermuxLib) {
                                     val context = LocalContext.current
                                     val scope = rememberCoroutineScope()
+                                    val uid = app.packageInfo.applicationInfo!!.uid
+                                    var showSettings by remember(app.packageName) { mutableStateOf(false) }
                                     val failedText = stringResource(R.string.privilege_open_terminal_failed)
                                     val copiedText = stringResource(R.string.privilege_axsh_copied)
                                     val notReadyText = stringResource(R.string.privilege_axsh_not_ready)
-                                    IconButton(
-                                        onClick = {
-                                            scope.launch {
-                                                val ready = withContext(Dispatchers.IO) {
-                                                    AxshLauncher.ensure(context)
-                                                }
-                                                if (!ready) {
-                                                    Toast.makeText(context, notReadyText, Toast.LENGTH_SHORT).show()
-                                                    return@launch
-                                                }
-                                                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                                                clipboard?.setPrimaryClip(
-                                                    ClipData.newPlainText("axsh", AxshLauncher.RUN_COMMAND)
-                                                )
-                                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                                                    Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
-                                                }
-                                                val intent = context.packageManager
-                                                    .getLaunchIntentForPackage(app.packageName)
-                                                if (intent == null) {
-                                                    Toast.makeText(context, failedText, Toast.LENGTH_SHORT).show()
-                                                } else {
-                                                    runCatching {
-                                                        context.startActivity(
-                                                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                        )
-                                                    }.onFailure {
+
+                                    IconButton(onClick = { showSettings = true }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Settings,
+                                            contentDescription = stringResource(R.string.privilege_app_settings)
+                                        )
+                                    }
+
+                                    if (showSettings) {
+                                        TerminalAppDialog(
+                                            app = app,
+                                            showRootless = privilegeViewModel.isRootMode,
+                                            initialRootless = privilegeViewModel.axshRootless(uid),
+                                            onRootlessChange = { privilegeViewModel.setAxshRootless(uid, it) },
+                                            onDismissRequest = { showSettings = false },
+                                            onLaunch = {
+                                                showSettings = false
+                                                scope.launch {
+                                                    val ready = withContext(Dispatchers.IO) {
+                                                        AxshLauncher.allowManageStorage(context, app.packageName)
+                                                        AxshLauncher.ensure(context)
+                                                    }
+                                                    if (!ready) {
+                                                        Toast.makeText(context, notReadyText, Toast.LENGTH_SHORT).show()
+                                                        return@launch
+                                                    }
+                                                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                                                    clipboard?.setPrimaryClip(
+                                                        ClipData.newPlainText("axsh", AxshLauncher.RUN_COMMAND)
+                                                    )
+                                                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                                        Toast.makeText(context, copiedText, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                    val intent = context.packageManager
+                                                        .getLaunchIntentForPackage(app.packageName)
+                                                    if (intent == null) {
                                                         Toast.makeText(context, failedText, Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        runCatching {
+                                                            context.startActivity(
+                                                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            )
+                                                        }.onFailure {
+                                                            Toast.makeText(context, failedText, Toast.LENGTH_SHORT).show()
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Terminal,
-                                            contentDescription = stringResource(R.string.privilege_open_terminal)
                                         )
                                     }
                                 }

@@ -950,11 +950,22 @@ open class AxeronService :
                 requireNotNull(stdout) { "stdout" }
 
                 val uid = Binder.getCallingUid()
+                val lowered = android.os.Process.myUid() == 0 &&
+                    getFlagsForUidInternal(uid, AxshConstants.FLAG_AXSH_ROOTLESS) != 0
+                val command = if (lowered) {
+                    val helper = File(System.getProperty("axeron.library.path").orEmpty(), AxshConstants.DROP_HELPER)
+                    if (!helper.canExecute()) {
+                        throw SecurityException("Rootless debugging unavailable: ${AxshConstants.DROP_HELPER} not found")
+                    }
+                    AxshConstants.rootlessArgv(helper.path, argv)
+                } else {
+                    argv
+                }
                 LOGGER.d(
                     "newAxshProcess: uid=%d, pty=%s, cmd=%s",
                     uid,
                     pty.toString(),
-                    argv.contentToString()
+                    command.contentToString()
                 )
 
                 if (wakeLockMode != WakeLockMode.NEVER) {
@@ -963,7 +974,7 @@ open class AxeronService :
                 val owner = clientManager.findClient(uid, Binder.getCallingPid())
                     ?.client?.asBinder()
                 val process = AxshProcess.start(
-                    argv, env?.filterNotNull()?.toTypedArray(), null,
+                    command, env?.filterNotNull()?.toTypedArray(), null,
                     stdin, stdout, stderr, pty, size, status, owner
                 )
                 lease?.let { held ->
@@ -1034,8 +1045,11 @@ open class AxeronService :
             return
         }
 
+        var newlyAllowed = false
         if ((mask and ConfigManager.MASK_PERMISSION) != 0) {
             val allowed = (value and ConfigManager.FLAG_ALLOWED) != 0
+            newlyAllowed = allowed &&
+                (getFlagsForUidInternal(uid, ConfigManager.FLAG_ALLOWED) and ConfigManager.FLAG_ALLOWED) == 0
             (value and ConfigManager.FLAG_DENIED) != 0
 
             val records: MutableList<ClientRecord> =
@@ -1055,5 +1069,14 @@ open class AxeronService :
         }
 
         configManager.update(uid, null, mask, value)
+
+        if (newlyAllowed) {
+            PackageManagerApis.getPackagesForUidNoThrow(uid)?.forEach { packageName ->
+                ActivityManagerApis.forceStopPackageNoThrow(
+                    packageName,
+                    UserHandleCompat.getUserId(uid)
+                )
+            }
+        }
     }
 }

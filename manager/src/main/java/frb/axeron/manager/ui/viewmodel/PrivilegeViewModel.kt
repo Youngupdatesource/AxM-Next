@@ -11,6 +11,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.application
 import androidx.lifecycle.viewModelScope
 import frb.axeron.api.Axeron
+import frb.axeron.axsh.AxshConstants
 import frb.axeron.manager.ui.util.HanziToPinyin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -114,6 +115,20 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun granted(uid: Int): Boolean {
         return (Axeron.getFlagsForUid(uid, MASK_PERMISSION) and FLAG_ALLOWED) == FLAG_ALLOWED
+    }
+
+    val isRootMode: Boolean
+        get() = runCatching { Axeron.pingBinder() && Axeron.getAxeronInfo().isRoot() }.getOrDefault(false)
+
+    fun axshRootless(uid: Int): Boolean =
+        (Axeron.getFlagsForUid(uid, AxshConstants.FLAG_AXSH_ROOTLESS) and AxshConstants.FLAG_AXSH_ROOTLESS) != 0
+
+    fun setAxshRootless(uid: Int, enabled: Boolean) {
+        Axeron.updateFlagsForUid(
+            uid,
+            AxshConstants.FLAG_AXSH_ROOTLESS,
+            if (enabled) AxshConstants.FLAG_AXSH_ROOTLESS else 0
+        )
     }
 
     fun grant(uid: Int) {

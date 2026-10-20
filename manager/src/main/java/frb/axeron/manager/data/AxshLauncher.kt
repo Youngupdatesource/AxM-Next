@@ -1,8 +1,10 @@
 package frb.axeron.manager.data
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import frb.axeron.api.Axeron
+import frb.axeron.api.AxeronPluginService
 import java.io.File
 
 object AxshLauncher {
@@ -27,6 +29,33 @@ object AxshLauncher {
             "exec \"\$AXSH\" \"\$@\"",
             ""
         ).joinToString("\n")
+    }
+
+    private const val MANAGE_STORAGE_PERMISSION = "android.permission.MANAGE_EXTERNAL_STORAGE"
+
+    suspend fun allowManageStorage(context: Context, packageName: String) {
+        val declared = try {
+            context.packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+                .requestedPermissions.orEmpty().contains(MANAGE_STORAGE_PERMISSION)
+        } catch (_: Exception) {
+            false
+        }
+        if (!declared) return
+        try {
+            val state = AxeronPluginService.execWithIO(
+                cmd = "cmd appops get $packageName MANAGE_EXTERNAL_STORAGE",
+                useBusybox = false,
+                hideStderr = true
+            )
+            if (state.out.contains("allow")) return
+            AxeronPluginService.execWithIO(
+                cmd = "cmd appops set $packageName MANAGE_EXTERNAL_STORAGE allow",
+                useBusybox = false,
+                hideStderr = true
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "can't allow MANAGE_EXTERNAL_STORAGE for $packageName", e)
+        }
     }
 
     fun ensure(context: Context): Boolean {

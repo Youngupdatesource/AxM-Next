@@ -172,7 +172,7 @@ class Sessions(private val host: Host) {
                 request.pty, windowSize(request.rows, request.cols), status
             )
         } catch (e: SecurityException) {
-            writeStatus(output, STATUS_DENIED, DENIED_MESSAGE)
+            writeStatus(output, STATUS_DENIED, e.message?.takeIf { it.isNotBlank() } ?: DENIED_MESSAGE)
             return null
         } catch (e: Exception) {
             Log.w(tag, "remote shell failed to start", e)

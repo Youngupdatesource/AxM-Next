@@ -1,5 +1,6 @@
 package frb.axeron.manager.ui.util
 
+import frb.axeron.axsh.AxshConstants
 import java.io.File
 
 /**
@@ -22,10 +23,9 @@ object RootlessShell {
 
     // adbd's supplementary groups for the shell user: shell, log, adb, input, inet, sdcard_*,
     // mount, net_*, readproc, bluetooth, usb, ext_data_rw, ext_obb_rw, readtracefs, graphics.
-    private const val SHELL_GROUPS =
-        "2000,1004,1007,1011,1015,1028,1009,3001,3002,3003,3006,3009,1002,1018,1078,1079,3012,1003"
+    private const val SHELL_GROUPS = AxshConstants.SHELL_GROUPS
 
-    private const val SHELL_CONTEXT = "u:r:shell:s0"
+    private const val SHELL_CONTEXT = AxshConstants.SHELL_CONTEXT
     private const val SHELL = "/system/bin/sh"
 
     /** Where the app's extracted native executables live (same place libaxeron.so runs from). */

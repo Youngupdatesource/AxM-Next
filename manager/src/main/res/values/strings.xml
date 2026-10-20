@@ -222,6 +222,10 @@
     <string name="privilege_filter_termux">Apps with libtermux.so only</string>
     <string name="privilege_open_terminal">Open terminal</string>
     <string name="privilege_open_terminal_failed">Can’t open this app</string>
+    <string name="privilege_app_settings">App settings</string>
+    <string name="privilege_rootless_debugging">Rootless debugging</string>
+    <string name="privilege_rootless_debugging_desc">Run this app's axsh sessions at the shell level (uid 2000, like adb shell) instead of root</string>
+    <string name="privilege_launch">Launch</string>
     <string name="privilege_axsh_copied">Command copied. Paste it in the terminal</string>
     <string name="privilege_axsh_not_ready">Start the AxManager service first</string>
     <string name="shortcut_name">Shortcut name</string>

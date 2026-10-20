@@ -272,53 +272,6 @@ class KsuWebInterface(
     }
 
     @JavascriptInterface
-    fun listSystemPackages(): String {
-//        val pm = context.packageManager
-        val packages = loadPackages().mapNotNull { pkg ->
-            val appInfo = pkg.applicationInfo
-            if (appInfo != null && (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) {
-                pkg.packageName
-            } else null
-        }
-            .sorted()
-        val jsonArray = JSONArray()
-        for (pkgName in packages) {
-            jsonArray.put(pkgName)
-        }
-        return jsonArray.toString()
-    }
-
-    @JavascriptInterface
-    fun listUserPackages(): String {
-//        val pm = context.packageManager
-        val packages = loadPackages()
-            .mapNotNull { pkg ->
-                val appInfo = pkg.applicationInfo
-                if (appInfo != null && (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0) {
-                    pkg.packageName
-                } else null
-            }
-            .sorted()
-        val jsonArray = JSONArray()
-        for (pkgName in packages) {
-            jsonArray.put(pkgName)
-        }
-        return jsonArray.toString()
-    }
-
-    @JavascriptInterface
-    fun listAllPackages(): String {
-//        val pm = context.packageManager
-        val packages = loadPackages()
-            .map { it.packageName }.sorted()
-        val jsonArray = JSONArray()
-        for (pkgName in packages) {
-            jsonArray.put(pkgName)
-        }
-        return jsonArray.toString()
-    }
-
-    @JavascriptInterface
     fun getPackagesInfo(packageNamesJson: String): String {
         val pm = context.packageManager
         val packageNames = JSONArray(packageNamesJson)
