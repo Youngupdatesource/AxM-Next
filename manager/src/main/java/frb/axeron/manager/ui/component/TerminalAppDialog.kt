@@ -87,12 +87,6 @@ fun TerminalAppDialog(
                     }
                 }
 
-                Text(
-                    text = stringResource(R.string.privilege_terminal_desc),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.small,
@@ -103,14 +97,6 @@ fun TerminalAppDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier.padding(12.dp)
-                    )
-                }
-
-                if (!showRootless) {
-                    Text(
-                        text = stringResource(R.string.privilege_terminal_mode_adb),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -137,6 +123,23 @@ fun TerminalAppDialog(
                                 rootless = it
                                 onRootlessChange(it)
                             }
+                        )
+                    }
+                }
+
+                // Explanation goes below the controls, right above the buttons
+                // (same layout as the WebUI shortcut dialog).
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.privilege_terminal_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!showRootless) {
+                        Text(
+                            text = stringResource(R.string.privilege_terminal_mode_adb),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
