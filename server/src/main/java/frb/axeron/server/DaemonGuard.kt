@@ -1,6 +1,5 @@
 package frb.axeron.server
 
-import android.os.SystemProperties
 import android.system.Os
 import frb.axeron.server.util.Logger
 import java.io.File
@@ -19,13 +18,9 @@ object DaemonGuard {
     private val LOGGER = Logger("DaemonGuard")
 
     private const val CMD_TIMEOUT_SEC = 5L
-    private const val START_DELAY_MS = 5_000L
 
     fun start(managerPackage: String) {
         Thread({
-            // Diagnostics spawn ~9 processes (getprop/cmd). Run them after the manager has had
-            // the binder, not while the daemon is still starting.
-            Thread.sleep(START_DELAY_MS)
             runCatching { logDiagnostics() }.onFailure { LOGGER.e("diagnostics failed", it) }
             runCatching { exemptManager(managerPackage) }.onFailure { LOGGER.e("exempt failed", it) }
         }, "axeron-guard").apply { isDaemon = true }.start()
@@ -41,7 +36,7 @@ object DaemonGuard {
             "init.svc.adbd", "sys.usb.config", "sys.usb.state", "persist.sys.usb.config",
             "service.adb.tcp.port", "persist.adb.tls_server.enable"
         )) {
-            LOGGER.i("prop $key=${prop(key)}")
+            LOGGER.i("prop $key=${run("getprop", key)}")
         }
 
         // Bukti apakah shell UID boleh memindahkan diri dari cgroup adbd (hanya dibaca, tidak diubah).
@@ -56,14 +51,6 @@ object DaemonGuard {
         for (op in listOf("RUN_ANY_IN_BACKGROUND", "RUN_IN_BACKGROUND")) {
             LOGGER.i("appops $op allow -> ${run("cmd", "appops", "set", pkg, op, "allow")}")
         }
-    }
-
-    // In-process read (SystemProperties -> __system_property_get). The old `getprop` spawned a
-    // process per key, 6 forks at startup just to print log lines.
-    private fun prop(key: String): String = try {
-        SystemProperties.get(key, "")
-    } catch (e: Throwable) {
-        "error(${e.javaClass.simpleName})"
     }
 
     private fun readFile(path: String): String = try {

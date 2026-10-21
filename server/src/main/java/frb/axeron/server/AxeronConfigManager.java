@@ -64,22 +64,7 @@ public class AxeronConfigManager extends ConfigManager {
         // When the package manager is not answering yet (root daemon started early at boot,
         // or while the system is busy), "uid has no packages" does NOT mean the app is gone.
         // Never wipe the saved permissions in that case.
-        // One scan for the whole constructor. It used to be three (a readiness probe, then the
-        // GET_PERMISSIONS scan here, then another one in sendBinderToClient), which is a big part
-        // of the slow start on devices with many apps.
-        List<PackageInfo> scanned = new ArrayList<>();
-        boolean pmReady = false;
-        try {
-            for (int userId : UserManagerApis.getUserIdsNoThrow()) {
-                List<PackageInfo> list = PackageManagerApis.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId);
-                if (list != null && !list.isEmpty()) {
-                    pmReady = true;
-                    scanned.addAll(list);
-                }
-            }
-        } catch (Throwable tr) {
-            LOGGER.w(tr, "scan installed packages");
-        }
+        boolean pmReady = isPackageManagerReady();
 
         if (config.packages == null) {
             config.packages = new ArrayList<>();
@@ -87,11 +72,6 @@ public class AxeronConfigManager extends ConfigManager {
         }
 
         for (AxeronConfig.PackageEntry entry : new ArrayList<>(config.packages)) {
-            if (entry == null) {
-                config.packages.remove(null);
-                changed = true;
-                continue;
-            }
             if (entry.packages == null) {
                 entry.packages = new ArrayList<>();
             }
@@ -140,8 +120,8 @@ public class AxeronConfigManager extends ConfigManager {
             }
         }
 
-        {
-            for (PackageInfo pi : scanned) {
+        for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+            for (PackageInfo pi : PackageManagerApis.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId)) {
                 if (pi == null
                         || pi.applicationInfo == null
                         || pi.requestedPermissions == null
@@ -162,6 +142,7 @@ public class AxeronConfigManager extends ConfigManager {
                 packages.add(pkg);
 
                 updateLocked(uid, packages, ConfigManager.MASK_PERMISSION, allowed ? ConfigManager.FLAG_ALLOWED : ConfigManager.FLAG_DENIED);
+                changed = true;
             }
         }
 
@@ -176,6 +157,19 @@ public class AxeronConfigManager extends ConfigManager {
         } catch (Throwable tr) {
             LOGGER.w(tr, "add shutdown hook");
         }
+    }
+
+    private static boolean isPackageManagerReady() {
+        try {
+            for (int userId : UserManagerApis.getUserIdsNoThrow()) {
+                if (!PackageManagerApis.getInstalledPackagesNoThrow(0, userId).isEmpty()) {
+                    return true;
+                }
+            }
+        } catch (Throwable tr) {
+            LOGGER.w(tr, "isPackageManagerReady");
+        }
+        return false;
     }
 
     /** Writes pending changes now instead of waiting for the delayed write. */
@@ -208,23 +202,7 @@ public class AxeronConfigManager extends ConfigManager {
             }
         }
         if (config != null) return config;
-        quarantine();
         return new AxeronConfig();
-    }
-
-    /** Unreadable config: keep it for debugging and start empty instead of failing on every start. */
-    private static void quarantine() {
-        try {
-            File base = ATOMIC_FILE.getBaseFile();
-            if (base.exists()) {
-                File bad = new File(base.getPath() + ".corrupt");
-                if (bad.exists()) bad.delete();
-                if (!base.renameTo(bad)) base.delete();
-                LOGGER.w("config unreadable, moved to " + bad);
-            }
-        } catch (Throwable tr) {
-            LOGGER.w(tr, "quarantine config");
-        }
     }
 
     public static void write(AxeronConfig config) {
