@@ -37,6 +37,7 @@ import frb.axeron.server.ServerConstants.MANAGER_APPLICATION_ID
 import frb.axeron.server.ServerConstants.PERMISSION
 import frb.axeron.server.ServerConstants.SHIZUKU_MANAGER_APPLICATION_ID
 import frb.axeron.server.api.RemoteProcessHolder
+import frb.axeron.ktx.workerHandler
 import frb.axeron.server.util.HandlerUtil
 import frb.axeron.server.util.IContentProviderCompat
 import frb.axeron.server.util.OsUtils
@@ -87,6 +88,7 @@ open class AxeronService :
         private const val CLIENT_ACTIVITY_TTL_MS = 60_000L
         private const val MANAGER_LOOKUP_ATTEMPTS = 4
         private const val MANAGER_LOOKUP_DELAY_MS = 750L
+        private const val CALLER_CACHE_TTL_MS = 5_000L
 
         @JvmStatic
         fun main(args: Array<String>) {
@@ -99,7 +101,14 @@ open class AxeronService :
 
             @Suppress("DEPRECATION")
             Looper.prepareMainLooper()
-            AxeronService()
+            try {
+                AxeronService()
+            } catch (tr: Throwable) {
+                // Without this the daemon dies with no trace and every restart repeats it
+                // until the user clears the app data.
+                LOGGER.e("fatal: server init failed", tr)
+                exitProcess(1)
+            }
             Looper.loop()
         }
 
@@ -113,8 +122,8 @@ open class AxeronService :
         fun waitSystemService(name: String) {
             while (ServiceManager.getService(name) == null) {
                 try {
-                    LOGGER.i("service $name is not started, wait 1s.")
-                    Thread.sleep(1000)
+                    LOGGER.i("service $name is not started, wait 200ms.")
+                    Thread.sleep(200)
                 } catch (it: Throwable) {
                     LOGGER.e("waitSystemService failed", it)
                 }
@@ -306,7 +315,29 @@ open class AxeronService :
         return AxeronConfigManager()
     }
 
+    // checkCaller() runs on every binder call and used to do two PackageManager IPCs each time
+    // (the Shizuku one throws when Shizuku isn't installed), all under one lock. The uids only
+    // change when the package is reinstalled/removed, so re-check at most every few seconds.
+    @Volatile
+    private var cachedManagerUid = -1
+    @Volatile
+    private var cachedShizukuManagerUid = -1
+    @Volatile
+    private var callerCacheAt = 0L
+
     private fun lookupManagerUid(): Int {
+        val now = SystemClock.elapsedRealtime()
+        if (cachedManagerUid != -1 && now - callerCacheAt < CALLER_CACHE_TTL_MS) {
+            return cachedManagerUid
+        }
+        val uid = lookupManagerUidUncached()
+        cachedManagerUid = uid
+        cachedShizukuManagerUid = getShizukuManagerApplicationInfo()?.uid ?: uid
+        callerCacheAt = now
+        return uid
+    }
+
+    private fun lookupManagerUidUncached(): Int {
         for (attempt in 1..MANAGER_LOOKUP_ATTEMPTS) {
             val uid = getManagerApplicationInfo()?.uid
             if (uid != null) return uid
@@ -317,11 +348,11 @@ open class AxeronService :
         exitProcess(ServerConstants.MANAGER_APP_NOT_FOUND)
     }
 
-    @Synchronized
     fun checkCaller(callingUid: Int): Boolean {
         val managerAppUid: Int = lookupManagerUid()
 
-        val shizukuManagerUid: Int = getShizukuManagerApplicationInfo()?.uid ?: managerAppUid
+        val shizukuManagerUid: Int =
+            if (cachedShizukuManagerUid != -1) cachedShizukuManagerUid else managerAppUid
         return UserHandleCompat.getAppId(callingUid) == managerAppUid || UserHandleCompat.getAppId(
             callingUid
         ) == shizukuManagerUid
@@ -464,9 +495,12 @@ open class AxeronService :
 
         BinderSender.register(asInterface(this))
 
+        // The manager is the one waiting on the spinner, so it gets the binder first. Clients
+        // used to go first and were processed one by one (package scan + 30s whitelist IPC +
+        // possible 1s retry sleep each) on the main thread, delaying the manager by seconds.
         mainHandler.post {
-            sendBinderToClient()
             sendBinderToManager()
+            workerHandler.post { sendBinderToClient() }
         }
 
         when (wakeLockMode) {

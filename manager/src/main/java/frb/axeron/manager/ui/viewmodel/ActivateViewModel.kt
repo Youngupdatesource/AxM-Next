@@ -115,6 +115,7 @@ class ActivateViewModel : ViewModel() {
     /** Dipanggil sebelum user mematikan server: tidak boleh ada auto-restart & health check. */
     fun markIntentionalStop() {
         intentionalStop = true
+        ServerGuard.cancelRestartWatch()
         ServerGuard.wasRunning = false
         ServerHealthScheduler.cancel(axeronApp)
         autoRestartJob?.cancel()
@@ -124,6 +125,8 @@ class ActivateViewModel : ViewModel() {
     fun markIntentionalRestart() {
         intentionalStop = true
         autoRestartJob?.cancel()
+        // If the server never comes back, bring it back (see ServerGuard.watchRestart).
+        ServerGuard.watchRestart(axeronApp)
     }
 
     private fun launchAutoRestart() {
@@ -230,6 +233,7 @@ class ActivateViewModel : ViewModel() {
                         intentionalStop = false
                         retryCount = 0
                         autoRestartJob?.cancel()
+                        ServerGuard.cancelRestartWatch()
                         ServerHealthScheduler.schedule(axeronApp)
                         checkShizukuIntercept()
                         status.axeronInfo

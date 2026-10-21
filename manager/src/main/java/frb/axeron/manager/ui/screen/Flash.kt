@@ -454,6 +454,7 @@ fun FlashScreen(
                                     null,
                                     null
                                 )
+                                frb.axeron.manager.service.ServerGuard.watchRestart(context)
                             }
                             navigator.popBackStack()
                             if (finishIntent) activity?.finish()
