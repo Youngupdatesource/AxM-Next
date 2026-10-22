@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.DividerDefaults
@@ -327,6 +328,16 @@ fun AppearanceScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                 checked = AppearancePrefs.switchIcon,
                 onSwitchChange = {
                     AppearancePrefs.switchIcon = it
+                }
+            )
+
+            SettingsItem(
+                iconVector = Icons.Filled.FormatBold,
+                label = stringResource(R.string.bold_text),
+                description = stringResource(R.string.bold_text_desc),
+                checked = AppearancePrefs.boldText,
+                onSwitchChange = {
+                    AppearancePrefs.boldText = it
                 }
             )
 

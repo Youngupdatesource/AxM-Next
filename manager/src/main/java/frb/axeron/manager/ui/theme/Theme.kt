@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import frb.axeron.manager.ui.util.AppearancePrefs
 import frb.axeron.manager.ui.viewmodel.SettingsViewModel
 
 /** Radius sudut kartu yang dipakai seragam di seluruh aplikasi. */
@@ -70,7 +71,7 @@ fun AxManagerTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = if (AppearancePrefs.boldText) BoldTypography else Typography,
         shapes = AxShapes
     ) {
         contentCompose(settingsViewModel)
@@ -125,11 +126,16 @@ fun axTopAppBarColors(): TopAppBarColors {
 
 /**
  * Warna kartu statistik (Privilege & Plugin di Home): secondaryContainer, sama dengan kartu
- * Superusers/Modules di KernelSU-Next. Pada palet dinamis gelap hasilnya keabu-biruan (~#373A4D),
+ * Superusers/Modules di KernelSU-Next. Pada palet dinamis gelap hasilnya keabu-biruan redup (~#373A4D),
  * pada terang lavender lembut (~#DFE1F8).
  */
 @Composable
-fun statTileContainerColor(): Color = MaterialTheme.colorScheme.secondaryContainer
+fun statTileContainerColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    // Gelap: diredupkan 25% ke arah latar supaya tidak terlalu kontras (~#373A4D seperti KernelSU-Next).
+    return if (isDarkScheme()) scheme.secondaryContainer.blend(scheme.background, 0.25f)
+    else scheme.secondaryContainer
+}
 
 @Composable
 fun statTileContentColor(): Color = MaterialTheme.colorScheme.onSecondaryContainer
