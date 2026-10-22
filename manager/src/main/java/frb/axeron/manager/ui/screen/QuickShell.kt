@@ -235,7 +235,8 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     ) {
                         Icon(Icons.Outlined.MoreVert, null)
                     }
-                }
+                },
+                colors = frb.axeron.manager.ui.theme.axTopAppBarColors()
             )
         },
         floatingActionButton = {

@@ -122,7 +122,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
+import frb.axeron.manager.ui.theme.axTopAppBarColors
 import frb.axeron.manager.ui.theme.cardContainerColor
+import frb.axeron.manager.ui.theme.cardElevation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(start = true)
@@ -214,6 +216,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                     }
                     Spacer(modifier = Modifier.padding(end = 12.dp))
                 },
+                colors = axTopAppBarColors(),
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -283,7 +286,7 @@ fun SupportCard() {
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = cardElevation()),
         onClick = {
             uriHandler.openUri(githubRepo)
         }
@@ -324,7 +327,7 @@ fun LearnCard() {
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = cardElevation()),
         onClick = {
             uriHandler.openUri(learnAxManager)
         }
@@ -374,7 +377,7 @@ fun StatusCard(
         "https://fahrez182.github.io/AxManager/guide/faq.html#start-via-wireless-debugging-start-by-connecting-to-a-computer-the-permission-of-adb-is-limited"
 
     ElevatedCard(
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = cardElevation()),
         colors = CardDefaults.elevatedCardColors(
             containerColor = run {
                 when {
@@ -783,7 +786,7 @@ fun InfoCard(activateViewModel: ActivateViewModel) {
     Card(
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation()),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -853,7 +856,7 @@ fun IssueReportCard() {
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = cardElevation())
     ) {
         Row(
             modifier = Modifier

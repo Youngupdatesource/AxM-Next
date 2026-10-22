@@ -3,15 +3,20 @@ package frb.axeron.manager.ui.theme
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBarColors
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -55,7 +60,7 @@ fun AxManagerTheme(
             val context = LocalContext.current
             when {
                 darkTheme -> dynamicDarkColorScheme(context)
-                else -> dynamicLightColorScheme(context)
+                else -> dynamicLightColorScheme(context).tunedForLight()
             }
         }
 
@@ -71,6 +76,63 @@ fun AxManagerTheme(
         contentCompose(settingsViewModel)
     }
 }
+
+/**
+ * Penyetelan palet dinamis mode terang supaya tidak terlalu kontras (acuan: KernelSU-Next).
+ *
+ * - Teks utama tidak lagi hitam pekat: digeser 30% ke arah onSurfaceVariant.
+ * - Garis outline dibuat lebih lembut.
+ * - surfaceContainerLowest (putih murni di palet dinamis) dilunakkan ke arah surfaceContainerLow,
+ *   supaya bottom sheet/dialog tidak terlihat "menyala" di atas latar yang sedikit keunguan.
+ *
+ * Warna latar, kartu, dan aksen tetap berasal dari wallpaper (Material You).
+ */
+private fun ColorScheme.tunedForLight(): ColorScheme = copy(
+    onBackground = onBackground.blend(onSurfaceVariant, 0.30f),
+    onSurface = onSurface.blend(onSurfaceVariant, 0.30f),
+    outline = outline.blend(surface, 0.15f),
+    outlineVariant = outlineVariant.blend(surface, 0.25f),
+    surfaceContainerLowest = surfaceContainerLowest.blend(surfaceContainerLow, 0.5f)
+)
+
+/** True bila skema aktif adalah tema gelap. */
+@Composable
+fun isDarkScheme(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+/**
+ * Elevasi kartu. Tema gelap memakai 3dp (hampir tidak kelihatan), tema terang datar (0dp):
+ * bayangan 3dp di latar terang membuat kartu terlihat mengambang dan terlalu kontras,
+ * sedangkan KernelSU-Next memakai kartu datar bertinta.
+ */
+@Composable
+fun cardElevation(): Dp = if (isDarkScheme()) 3.dp else 0.dp
+
+/**
+ * Warna top bar. Selalu sama dengan latar layar (background), baik saat konten di-scroll maupun
+ * tidak. Default Material memakai surfaceContainer saat "scrolled"; pada palet dinamis gelap
+ * warna itu kebiruan (#1C1E2A) dan membuat header Home berbeda dari header Pengaturan
+ * (#0F131C, hitam sedikit biru).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun axTopAppBarColors(): TopAppBarColors {
+    val bg = MaterialTheme.colorScheme.background
+    return TopAppBarDefaults.topAppBarColors(
+        containerColor = bg,
+        scrolledContainerColor = bg
+    )
+}
+
+/**
+ * Warna kartu statistik (Privilege & Plugin di Home): secondaryContainer, sama dengan kartu
+ * Superusers/Modules di KernelSU-Next. Pada palet dinamis gelap hasilnya keabu-biruan (~#373A4D),
+ * pada terang lavender lembut (~#DFE1F8).
+ */
+@Composable
+fun statTileContainerColor(): Color = MaterialTheme.colorScheme.secondaryContainer
+
+@Composable
+fun statTileContentColor(): Color = MaterialTheme.colorScheme.onSecondaryContainer
 
 /**
  * Warna kartu: sedikit lebih terang dari top bar (saat di-scroll) dan bottom bar, tapi tidak sama
@@ -117,7 +179,7 @@ fun insetTextFieldColors(): TextFieldColors {
  * Warna badan kapsul nav. Di tema gelap dibuat lebih gelap dari kartu (kali 0,78 per kanal),
  * jadi kapsul tidak menyatu dengan kartu di belakangnya: kartu #24252E -> kapsul #1C1D24, setara
  * kapsul KernelSU, dan tetap mengikuti palet dinamis karena diturunkan dari [cardContainerColor].
- * Tema terang tetap memakai surfaceContainerHighest.
+ * Tema terang memakai campuran surfaceContainerLow/surfaceContainer.
  */
 @Composable
 fun capsuleContainerColor(): Color {
@@ -126,7 +188,9 @@ fun capsuleContainerColor(): Color {
         val card = cardContainerColor()
         Color(red = card.red * 0.78f, green = card.green * 0.78f, blue = card.blue * 0.78f, alpha = 1f)
     } else {
-        scheme.surfaceContainerHighest
+        // Terang: kapsul lebih terang dari kartu (acuan KernelSU-Next #F2F0FB di atas kartu
+        // #E3E1EF), bukan sama dengan kartu seperti sebelumnya.
+        scheme.surfaceContainerLow.blend(scheme.surfaceContainer, 0.5f)
     }
 }
 
@@ -141,5 +205,5 @@ fun capsuleContainerColor(): Color {
 fun sheetContainerColor(): Color {
     val scheme = MaterialTheme.colorScheme
     return if (scheme.background.luminance() < 0.5f) capsuleContainerColor()
-    else scheme.surfaceContainerLowest
+    else scheme.surfaceContainerLow
 }

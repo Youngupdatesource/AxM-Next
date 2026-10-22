@@ -44,7 +44,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.viewmodel.PluginViewModel
 import frb.axeron.manager.ui.viewmodel.PrivilegeViewModel
-import frb.axeron.manager.ui.theme.cardContainerColor
+import frb.axeron.manager.ui.theme.cardElevation
+import frb.axeron.manager.ui.theme.statTileContainerColor
+import frb.axeron.manager.ui.theme.statTileContentColor
 
 @Composable
 @Preview
@@ -153,7 +155,7 @@ private fun StatTile(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = colorScheme.onSurfaceVariant,
+                tint = statTileContentColor(),
                 modifier = Modifier.size(28.dp)
             )
             Spacer(Modifier.width(16.dp))
@@ -167,7 +169,7 @@ private fun StatTile(
                 Text(
                     text = "$count",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colorScheme.onSurfaceVariant
+                    color = statTileContentColor().copy(alpha = 0.8f)
                 )
             }
         }
@@ -178,16 +180,22 @@ private fun StatTile(
             onClick = onClick,
             modifier = modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = statTileContainerColor(),
+                contentColor = statTileContentColor()
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation()),
             content = tileContent
         )
     } else {
         Card(
             modifier = modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(containerColor = cardContainerColor()),
-            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = statTileContainerColor(),
+                contentColor = statTileContentColor()
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation()),
             content = tileContent
         )
     }
