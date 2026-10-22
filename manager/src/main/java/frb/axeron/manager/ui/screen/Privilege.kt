@@ -166,10 +166,13 @@ fun PrivilegeScreen(
             ) {
                 items(
                     privilegeViewModel.privilegeList,
-                    key = { it.packageName + it.uid }
+                    key = { it.packageName + it.uid },
+                    contentType = { "privilege_app" }
                 ) { app ->
                     ListItem(
-                        modifier = Modifier.animateItem().padding(end = 6.dp, top = 6.dp),
+                        modifier = Modifier
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            .padding(end = 6.dp, top = 6.dp),
                         headlineContent = {
                             Text(
                                 text = app.label,

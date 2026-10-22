@@ -52,11 +52,13 @@ import frb.axeron.manager.ui.theme.AxManagerTheme
 import frb.axeron.server.util.Logger
 import frb.axeron.shared.ShizukuApiConstant.REQUEST_PERMISSION_REPLY_ALLOWED
 import frb.axeron.shared.ShizukuApiConstant.REQUEST_PERMISSION_REPLY_IS_ONETIME
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 class RequestPermissionActivity : ComponentActivity() {
 
@@ -74,22 +76,21 @@ class RequestPermissionActivity : ComponentActivity() {
         }
     }
 
-    private fun waitForBinder(): Boolean {
-        val latch = CountDownLatch(1)
-        val listener = object : Axeron.OnBinderReceivedListener {
-            override fun onBinderReceived() {
-                latch.countDown()
-                Axeron.removeBinderReceivedListener(this)
-            }
-        }
+    private suspend fun waitForBinder(): Boolean {
+        if (Axeron.pingBinder()) return true
+        val ready = CompletableDeferred<Unit>()
+        val listener = Axeron.OnBinderReceivedListener { ready.complete(Unit) }
         Axeron.addBinderReceivedListenerSticky(listener, workerHandler)
         return try {
-            latch.await(5, TimeUnit.SECONDS)
-        } catch (e: TimeoutException) {
-            LOGGER.e(e, "Binder not received in 5s")
-            false
+            withTimeoutOrNull(BINDER_WAIT_MS) { ready.await() } != null
+        } finally {
+            Axeron.removeBinderReceivedListener(listener)
         }
     }
+
+    private fun isAlreadyAllowed(uid: Int): Boolean = runCatching {
+        (Axeron.getFlagsForUid(uid, FLAG_ALLOWED or FLAG_DENIED) and FLAG_ALLOWED) == FLAG_ALLOWED
+    }.getOrDefault(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,34 +105,64 @@ class RequestPermissionActivity : ComponentActivity() {
             intent.getParcelableExtra("applicationInfo")
         }
 
-        if (uid == -1 || pid == -1 || ai == null || !waitForBinder()) {
+        if (uid == -1 || pid == -1 || ai == null) {
             finish()
             return
         }
 
-        val permission =
-            Axeron.checkRemotePermission("android.permission.GRANT_RUNTIME_PERMISSIONS") == PackageManager.PERMISSION_GRANTED
+        lifecycleScope.launch {
+            if (!withContext(Dispatchers.IO) { waitForBinder() }) {
+                finish()
+                return@launch
+            }
 
-        if (!permission) {
-            setResult(uid, pid, requestCode, allowed = false, onetime = true)
-            return
-        }
-
-        setContent {
-            AxManagerTheme {
-                RequestPermissionDialog(
-                    applicationInfo = ai,
-                    onAllow = { once ->
-                        setResult(uid, pid, requestCode, allowed = true, onetime = once)
-                        finish()
-                    },
-                    onDeny = {
-                        setResult(uid, pid, requestCode, allowed = false, onetime = true)
-                        finish()
+            val decision = withContext(Dispatchers.IO) {
+                when {
+                    isAlreadyAllowed(uid) -> {
+                        setResult(uid, pid, requestCode, allowed = true, onetime = true)
+                        Decision.Handled
                     }
-                )
+                    Axeron.checkRemotePermission("android.permission.GRANT_RUNTIME_PERMISSIONS") != PackageManager.PERMISSION_GRANTED -> {
+                        setResult(uid, pid, requestCode, allowed = false, onetime = true)
+                        Decision.Handled
+                    }
+                    else -> Decision.Ask
+                }
+            }
+
+            if (decision == Decision.Handled) {
+                finish()
+                return@launch
+            }
+
+            setContent {
+                AxManagerTheme {
+                    RequestPermissionDialog(
+                        applicationInfo = ai,
+                        onAllow = { once ->
+                            workerHandler.post {
+                                setResult(uid, pid, requestCode, allowed = true, onetime = once)
+                            }
+                            finish()
+                        },
+                        onDeny = {
+                            workerHandler.post {
+                                setResult(uid, pid, requestCode, allowed = false, onetime = true)
+                            }
+                            finish()
+                        }
+                    )
+                }
             }
         }
+    }
+
+    private enum class Decision { Handled, Ask }
+
+    private companion object {
+        const val BINDER_WAIT_MS = 20_000L
+        const val FLAG_ALLOWED = 1 shl 1
+        const val FLAG_DENIED = 1 shl 2
     }
 }
 

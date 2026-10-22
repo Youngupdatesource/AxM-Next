@@ -35,6 +35,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         private const val SHIZUKU_PERMISSION = "moe.shizuku.manager.permission.API_V23"
         private const val KEY_SHIZUKU_ONLY = "privilege_shizuku_only"
         private const val KEY_TERMUX_ONLY = "privilege_termux_only"
+        private const val KEY_GRANTED_UIDS = "privilege_granted_uids"
 
         private val PRIVILEGE_ORDER = compareByDescending<AppsViewModel.AppInfo> { it.isAdded }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.label }
@@ -67,6 +68,18 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit().putBoolean(KEY_TERMUX_ONLY, value).apply()
     }
 
+    private var cachedGranted by mutableStateOf(
+        prefs.getStringSet(KEY_GRANTED_UIDS, emptySet())
+            ?.mapNotNull { it.toIntOrNull() }
+            ?.toSet()
+            ?: emptySet()
+    )
+
+    private fun saveGrantedCache(uids: Set<Int>) {
+        cachedGranted = uids
+        prefs.edit().putStringSet(KEY_GRANTED_UIDS, uids.map { it.toString() }.toSet()).apply()
+    }
+
     var isRefreshing: Boolean by mutableStateOf(false)
         private set
 
@@ -95,7 +108,6 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
             }
             .sortedWith(PRIVILEGE_ORDER)
             .toList()
-            .also { isRefreshing = false }
     }
 
     // Helper Extension
@@ -110,7 +122,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
         private set
 
     val privilegedCount by derivedStateOf {
-        privileges.values.count { it.isAdded }
+        if (privileges.isEmpty()) cachedGranted.size else privileges.values.count { it.isAdded }
     }
 
     fun granted(uid: Int): Boolean {
@@ -138,6 +150,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                 this[uid] = it.copy(isAdded = true)
             }
         }
+        saveGrantedCache(cachedGranted + uid)
     }
 
     fun revoke(uid: Int) {
@@ -147,6 +160,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                 this[uid] = it.copy(isAdded = false)
             }
         }
+        saveGrantedCache(cachedGranted - uid)
     }
 
 
@@ -170,6 +184,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
             // daftar. Kalau tidak terjangkau, pakai status sebelumnya.
             val previous = privileges
             val reachableBefore = Axeron.pingBinder()
+            val cached = cachedGranted
 
             val selfUid = android.os.Process.myUid()
 
@@ -198,7 +213,7 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                                     packageInfo,
                                     appInfo.loadLabel(pm).toString(),
                                     if (reachableBefore) granted(appInfo.uid)
-                                    else previous[appInfo.uid]?.isAdded ?: false,
+                                    else previous[appInfo.uid]?.isAdded ?: (appInfo.uid in cached),
                                     usesShizuku,
                                     hasTermuxLib
                                 )
@@ -227,6 +242,9 @@ class PrivilegeViewModel(application: Application) : AndroidViewModel(applicatio
                 result.mapValues { (uid, app) ->
                     previous[uid]?.let { app.copy(isAdded = it.isAdded) } ?: app
                 }
+            }
+            if (trusted) {
+                saveGrantedCache(result.values.filter { it.isAdded }.map { it.uid }.toSet())
             }
             isRefreshing = false
         }

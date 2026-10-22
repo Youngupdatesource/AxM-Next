@@ -657,6 +657,15 @@ open class AxeronService :
     ) {
 
         LOGGER.i("showPermissionConfirmation")
+        if (clientRecord != null) {
+            val entry = configManager.find(callingUid)
+            val sameApp = entry?.packages.isNullOrEmpty() || entry!!.packages.contains(clientRecord.packageName)
+            if (entry != null && entry.isAllowed() && sameApp) {
+                clientRecord.allowed = true
+                clientRecord.dispatchRequestPermissionResult(requestCode, true)
+                return
+            }
+        }
         val ai = if (clientRecord != null) {
             PackageManagerApis.getApplicationInfoNoThrow(clientRecord.packageName, 0, userId)
                 ?: return
