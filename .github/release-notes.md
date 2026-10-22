@@ -1,6 +1,6 @@
-## AxM-Next v1.1
+## fOxygen v1.1
 
-A modified fork of [AxManager](https://github.com/fahrez182/AxManager) by fahrez182.
+fOxygen (formerly AxM-Next) is a modified fork of [AxManager](https://github.com/fahrez182/AxManager) by fahrez182.
 
 ### What's new
 - New terminal-style output for Quick Shell: handles floods like `dumpsys`, keeps the last 20,000 lines (or every line with the unlimited option), with line numbers and text size options
@@ -14,4 +14,4 @@ A modified fork of [AxManager](https://github.com/fahrez182/AxManager) by fahrez
 ### Install
 Download the APK below and verify it against the attached `.sha256` file. If Android refuses to install over an existing build, uninstall the old one first, because it was signed with a different key.
 
-See the [README](https://github.com/Youngupdatesource/AxM-Next#readme) for details and credits.
+See the [README](https://github.com/Youngupdatesource/fOxygen#readme) for details and credits.

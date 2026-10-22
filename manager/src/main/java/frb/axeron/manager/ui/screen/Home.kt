@@ -279,7 +279,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
 @Composable
 fun SupportCard() {
     val uriHandler = LocalUriHandler.current
-    val githubRepo = "https://github.com/Youngupdatesource/AxM-Next"
+    val githubRepo = "https://github.com/Youngupdatesource/fOxygen"
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)),
@@ -849,7 +849,7 @@ private fun InfoRow(icon: ImageVector, label: String, value: String) {
 @Composable
 fun IssueReportCard() {
     val uriHandler = LocalUriHandler.current
-    val githubIssueUrl = "https://github.com/Youngupdatesource/AxM-Next/issues"
+    val githubIssueUrl = "https://github.com/Youngupdatesource/fOxygen/issues"
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)),

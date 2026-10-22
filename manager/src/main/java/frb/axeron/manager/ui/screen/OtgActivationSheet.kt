@@ -77,7 +77,7 @@ private enum class OtgRole { COMPUTER, TARGET }
 
 /**
  * OTG activation, opened on both phones: the *computer* drives [OtgActivator] (scan, handshake,
- * start AxM-Next on the other phone); the *target* watches its own side with [OtgTargetMonitor]
+ * start fOxygen on the other phone); the *target* watches its own side with [OtgTargetMonitor]
  * (USB debugging, cable link, server coming up) and logs it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
