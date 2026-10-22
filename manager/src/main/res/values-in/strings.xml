@@ -10,8 +10,8 @@
     <string name="axeron_environment">Lingkungan Axeron</string>
     <string name="search_label">Cari</string>
     <string name="home">Beranda</string>
-    <string name="privilege">Hak Akses</string>
-    <string name="privilege_plural">Hak Akses</string>
+    <string name="privilege">Hak Istimewa</string>
+    <string name="privilege_plural">Hak Istimewa</string>
     <string name="plugin">Plugin</string>
     <string name="plugin_plural">Plugin</string>
     <string name="settings">Pengaturan</string>
@@ -97,8 +97,6 @@
     <string name="auto_theme_desc">Pilih tema secara otomatis</string>
     <string name="switch_icon">Ikon Switch</string>
     <string name="switch_icon_desc">Tampilkan ikon ✓ dan ✕ pada switch</string>
-    <string name="bold_text">Teks tebal</string>
-    <string name="bold_text_desc">Pakai font OnePlus Sans Bold untuk seluruh teks</string>
     <string name="dynamic_color">Warna Dinamis</string>
     <string name="dynamic_color_desc">Pilih warna secara dinamis</string>
     <string name="color_palette">Palet Warna</string>
@@ -144,7 +142,7 @@
     <string name="report_issue">Ada Masalah?</string>
     <string name="report_issue_msg">Menemukan bug atau memiliki masukan?</string>
     <string name="report_issue_msg2">Laporkan sesegera mungkin!</string>
-    <string name="privilege_manager">Manajer Akses</string>
+    <string name="privilege_manager">Manajer Hak Istimewa</string>
     <string name="search_label_apps">Cari Aplikasi</string>
     <string name="quick_shell">QuickShell</string>
     <string name="quick_shell_short">QShell</string>
