@@ -144,9 +144,9 @@ fun statTileContainerColor(): Color {
 fun statTileContentColor(): Color {
     val scheme = MaterialTheme.colorScheme
     return if (scheme.background.luminance() < 0.5f) {
-        scheme.onSecondaryContainer.blend(statTileContainerColor(), 0.28f)
+        scheme.onSecondaryContainer.blend(scheme.onSurfaceVariant, 0.50f)
     } else {
-        scheme.onSecondaryContainer.blend(scheme.secondaryContainer, 0.15f)
+        scheme.onSecondaryContainer
     }
 }
 

@@ -32,6 +32,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -148,8 +152,10 @@ private fun StatTile(
     onClick: (() -> Unit)? = null
 ) {
     val tileContent: @Composable ColumnScope.() -> Unit = {
+        val titleStyle = MaterialTheme.typography.titleMedium
+        var titleScale by remember(title, titleStyle.fontFamily) { mutableFloatStateOf(1f) }
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
+            modifier = Modifier.padding(start = 20.dp, end = 12.dp, top = 22.dp, bottom = 22.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -162,14 +168,21 @@ private fun StatTile(
             Column {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = titleStyle,
+                    fontSize = titleStyle.fontSize * titleScale,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = {
+                        if (it.hasVisualOverflow && titleScale > 0.7f) {
+                            titleScale = (titleScale * 0.94f).coerceAtLeast(0.7f)
+                        }
+                    }
                 )
                 Text(
                     text = "$count",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = statTileContentColor().copy(alpha = 0.8f)
+                    color = statTileContentColor().copy(alpha = 0.9f)
                 )
             }
         }
