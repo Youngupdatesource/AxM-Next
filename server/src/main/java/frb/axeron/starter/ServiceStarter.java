@@ -1,5 +1,6 @@
 package frb.axeron.starter;
 
+import frb.axeron.server.ManagerIdentity;
 import static frb.axeron.shared.ShizukuApiConstant.USER_SERVICE_ARG_PGID;
 import static frb.axeron.shared.ShizukuApiConstant.USER_SERVICE_ARG_TOKEN;
 
@@ -93,7 +94,7 @@ public class ServiceStarter {
     }
 
     private static boolean sendBinder(IBinder binder, String token, int pgid, boolean retry) {
-        String packageName = ServerConstants.MANAGER_APPLICATION_ID;
+        String packageName = ManagerIdentity.MANAGER_APPLICATION_ID;
         String name = packageName + ".server";
         int userId = 0;
         IContentProvider provider = null;

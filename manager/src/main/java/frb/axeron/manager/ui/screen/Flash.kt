@@ -1,5 +1,6 @@
 package frb.axeron.manager.ui.screen
 
+import frb.axeron.manager.ui.util.ServerRestart
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -445,15 +446,7 @@ fun FlashScreen(
                     onClick = {
                         scope.launch {
                             reigniteLoading.withLoading {
-                                Axeron.newProcess(
-                                    AxeronCommandSession.getQuickCmd(
-                                        Starter.internalCommand,
-                                        true,
-                                        false
-                                    ),
-                                    null,
-                                    null
-                                )
+                                ServerRestart.launch()
                             }
                             navigator.popBackStack()
                             if (finishIntent) activity?.finish()

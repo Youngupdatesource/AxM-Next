@@ -33,7 +33,7 @@ import frb.axeron.axsh.IAxshLauncher
 import frb.axeron.axsh.IAxshProcess
 import frb.axeron.axsh.host.AxshProcess
 import frb.axeron.axsh.host.PtyHost
-import frb.axeron.server.ServerConstants.MANAGER_APPLICATION_ID
+import frb.axeron.server.ManagerIdentity.MANAGER_APPLICATION_ID
 import frb.axeron.server.ServerConstants.PERMISSION
 import frb.axeron.server.ServerConstants.SHIZUKU_MANAGER_APPLICATION_ID
 import frb.axeron.server.api.RemoteProcessHolder
@@ -695,7 +695,7 @@ open class AxeronService :
         }
 
         LOGGER.i("Requesting Permission")
-        val intent = Intent(ServerConstants.REQUEST_PERMISSION_ACTION)
+        val intent = Intent(ManagerIdentity.REQUEST_PERMISSION_ACTION)
             .setPackage(MANAGER_APPLICATION_ID)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
             .putExtra("uid", callingUid)

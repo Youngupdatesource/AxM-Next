@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
@@ -30,7 +31,7 @@
 #define EXIT_FATAL_KILL 9
 #define EXIT_FATAL_BINDER_BLOCKED_BY_SELINUX 10
 
-#define PACKAGE_NAME "frb.axeron.manager"
+#define PACKAGE_NAME "com.foxygen.manager"
 #define SERVER_NAME "axeron_server"
 #define SERVER_CLASS_PATH "frb.axeron.server.AxeronService"
 
@@ -98,6 +99,8 @@ v_current = (uintptr_t) v + v_size - sizeof(char *); \
 
     char lib_path[PATH_MAX]{0};
     snprintf(lib_path, PATH_MAX, "%s/lib/%s", dirname(dex_path), ABI);
+
+    signal(SIGPIPE, SIG_DFL);
 
     ARG(argv)
     ARG_PUSH(argv, "/system/bin/app_process")
@@ -186,6 +189,8 @@ static int switch_cgroup() {
 }
 
 int main(int argc, char *argv[]) {
+    signal(SIGPIPE, SIG_IGN);
+
     std::string apk_path;
     for (int i = 0; i < argc; ++i) {
         if (strncmp(argv[i], "--apk=", 6) == 0) {

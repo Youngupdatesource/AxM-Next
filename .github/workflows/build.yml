@@ -1,4 +1,4 @@
-name: Build AxM-Next
+name: Build fOxygen
 
 on:
   workflow_dispatch:
@@ -87,7 +87,7 @@ jobs:
             KA="ax"
             KP="$SP"
             echo "::add-mask::$SP"
-            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -alias "$KA" -keyalg RSA -keysize 2048 -validity 10000 -storepass "$SP" -keypass "$KP" -dname "CN=AxM-Next"
+            keytool -genkeypair -keystore "$KS" -storetype PKCS12 -alias "$KA" -keyalg RSA -keysize 2048 -validity 10000 -storepass "$SP" -keypass "$KP" -dname "CN=fOxygen"
           fi
           {
             echo "sdk.dir=$ANDROID_HOME"
@@ -107,7 +107,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: AxM-Next-build-log
+          name: fOxygen-build-log
           path: |
             build.log
             **/build/reports/**
@@ -118,7 +118,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AxM-Next-apk
+          name: fOxygen-apk
           path: manager/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 7
@@ -134,5 +134,5 @@ jobs:
           (cd "$(dirname "$apk")" && sha256sum "$(basename "$apk")" > "$(basename "$apk").sha256")
           gh release create "$TAG" "$apk" "$apk.sha256" \
             --target "$GITHUB_SHA" \
-            --title "AxM-Next $TAG" \
+            --title "fOxygen $TAG" \
             --notes-file .github/release-notes.md

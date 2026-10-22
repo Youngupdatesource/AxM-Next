@@ -150,7 +150,7 @@ fun TerminalAppDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismissRequest) {
-                        Text(stringResource(android.R.string.cancel))
+                        Text(stringResource(R.string.close))
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = onLaunch) {

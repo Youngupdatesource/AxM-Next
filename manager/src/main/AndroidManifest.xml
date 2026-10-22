@@ -32,9 +32,9 @@
         tools:node="remove" />
 
     <permission
-        android:name="frb.axeron.manager.permission.MANAGER"
+        android:name="${applicationId}.permission.MANAGER"
         android:protectionLevel="signature" />
-    <uses-permission android:name="frb.axeron.manager.permission.MANAGER" />
+    <uses-permission android:name="${applicationId}.permission.MANAGER" />
 
     <application
         android:name=".AxeronApplication"
@@ -160,7 +160,7 @@
             android:directBootAware="true"
             android:enabled="true"
             android:exported="true"
-            android:permission="frb.axeron.manager.permission.MANAGER">
+            android:permission="${applicationId}.permission.MANAGER">
             <intent-filter>
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>

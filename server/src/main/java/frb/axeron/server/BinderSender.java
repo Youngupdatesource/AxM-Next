@@ -31,7 +31,7 @@ public class BinderSender {
 
     private static final Logger LOGGER = new Logger("BinderSender");
 
-    private static final String PERMISSION_MANAGER = "frb.axeron.manager.permission.MANAGER";
+    private static final String PERMISSION_MANAGER = ManagerIdentity.PERMISSION_MANAGER;
 
     private static final String SHIZUKU_PERMISSION_MANAGER = "moe.shizuku.manager.permission.MANAGER";
 
@@ -59,7 +59,7 @@ public class BinderSender {
         if (packages.isEmpty())
             return;
 
-        boolean isOurManager = packages.contains(ServerConstants.MANAGER_APPLICATION_ID);
+        boolean isOurManager = packages.contains(ManagerIdentity.MANAGER_APPLICATION_ID);
 
         IShizukuService shizukuService = axeronService.getShizukuService();
 

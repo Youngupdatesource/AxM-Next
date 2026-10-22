@@ -31,6 +31,7 @@ import frb.axeron.manager.AxeronApplication.Companion.axeronApp
 import frb.axeron.manager.adb.AdbStateInfo
 import frb.axeron.manager.service.ServerGuard
 import frb.axeron.manager.service.ServerHealthScheduler
+import frb.axeron.manager.ui.util.ServerRestart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -53,6 +54,8 @@ class ActivateViewModel : ViewModel() {
         const val MAX_AUTO_RETRIES = 10
         private const val FIRST_RETRY_GRACE_MS = 3_000L
         private const val MAX_BACKOFF_MS = 30_000L
+        private const val RESTART_DOWN_TIMEOUT_MS = 6_000L
+        private const val RESTART_UP_TIMEOUT_MS = 20_000L
     }
 
     var activateStatus by mutableStateOf<ActivateStatus>(run {
@@ -126,6 +129,25 @@ class ActivateViewModel : ViewModel() {
         autoRestartJob?.cancel()
     }
 
+    fun restartServer() {
+        markIntentionalRestart()
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { ServerRestart.launch() }
+                .onFailure { Log.e(TAG, "restart command failed", it) }
+
+            withTimeoutOrNull(RESTART_DOWN_TIMEOUT_MS) {
+                snapshotFlow { activateStatus }.first { it !is ActivateStatus.Running }
+            }
+            awaitRunning(RESTART_UP_TIMEOUT_MS)
+
+            if (activateStatus !is ActivateStatus.Running) {
+                Log.w(TAG, "server did not come back after restart, starting it again")
+                intentionalStop = false
+                ServerGuard.restart(axeronApp)
+            }
+        }
+    }
+
     private fun launchAutoRestart() {
         if (autoRestartJob?.isActive == true) return
         autoRestartJob = viewModelScope.launch(Dispatchers.IO) {
@@ -174,15 +196,7 @@ class ActivateViewModel : ViewModel() {
                 axeronInfo.isNeedUpdate() -> {
                     trySend(ActivateStatus.Updating(axeronInfo))
                     setTryToActivate(true)
-                    Axeron.newProcess(
-                        AxeronCommandSession.getQuickCmd(
-                            Starter.internalCommand,
-                            true,
-                            false
-                        ),
-                        null,
-                        null
-                    )
+                    ServerRestart.launch()
                 }
 
                 axeronInfo.isRunning() -> {

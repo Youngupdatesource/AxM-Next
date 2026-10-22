@@ -22,7 +22,7 @@ object Broker : Sessions.Host {
     override val tag = "AxshBroker"
 
     private const val ACTION_REQUEST_BINDER = "AxRuntime.REQUEST_BINDER"
-    private const val MANAGER_PACKAGE = "frb.axeron.manager"
+    private const val MANAGER_PACKAGE = AxshConstants.MANAGER_PACKAGE
     private const val BINDER_TIMEOUT_MS = 5_000L
 
     private val sessions = Sessions(this)

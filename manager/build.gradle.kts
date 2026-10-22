@@ -14,7 +14,7 @@ android {
     namespace = "frb.axeron.manager"
 
     defaultConfig {
-        applicationId = "frb.axeron.manager"
+        applicationId = "com.foxygen.manager"
     }
 
     buildTypes {
@@ -37,7 +37,7 @@ android {
             .format(DateTimeFormatter.ofPattern("yyMMddHHmm"))
         outputs.all {
             val outputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            outputImpl.outputFileName = "AxM-Next_v${versionName}_${versionCode}-${buildType.name}_$ts.apk"
+            outputImpl.outputFileName = "fOxygen_v${versionName}_${versionCode}-${buildType.name}_$ts.apk"
 
             val outDir = File(rootDir, "out")
             val mappingPath = File(outDir, "mapping").absolutePath
