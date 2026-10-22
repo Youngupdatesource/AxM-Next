@@ -382,6 +382,9 @@ class AxActivity : ComponentActivity() {
             }
         }
         val previewTab = swipe.hold ?: dragNeighbor
+        val blockTouches by remember {
+            derivedStateOf { swipe.hold != null || swipe.offsetPx != 0f || swipe.settling }
+        }
         val dragState = rememberDraggableState { delta ->
             swipe.onDrag(delta, hasNext = nextTab != null, hasPrev = prevTab != null)
         }
@@ -470,6 +473,14 @@ class AxActivity : ComponentActivity() {
                             ) {
                                 TabPreview(tab, navigator, viewModelGlobal)
                             }
+                        }
+
+                        if (blockTouches) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {}
+                            )
                         }
                     }
                 }

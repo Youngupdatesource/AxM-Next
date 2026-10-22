@@ -14,12 +14,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import frb.axeron.manager.ui.util.AppearancePrefs
 import frb.axeron.manager.ui.viewmodel.SettingsViewModel
 
 /** Radius sudut kartu yang dipakai seragam di seluruh aplikasi. */
@@ -68,9 +70,14 @@ fun AxManagerTheme(
         else -> getVortexLightColorScheme(customPrimaryColor)
     }
 
+    val boldText = AppearancePrefs.boldText
+    val typography = remember(boldText) {
+        if (boldText) boldTypography() else Typography
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = typography,
         shapes = AxShapes
     ) {
         contentCompose(settingsViewModel)
@@ -123,16 +130,25 @@ fun axTopAppBarColors(): TopAppBarColors {
     )
 }
 
-/**
- * Warna kartu statistik (Privilege & Plugin di Home): secondaryContainer, sama dengan kartu
- * Superusers/Modules di KernelSU-Next. Pada palet dinamis gelap hasilnya keabu-biruan (~#373A4D),
- * pada terang lavender lembut (~#DFE1F8).
- */
 @Composable
-fun statTileContainerColor(): Color = MaterialTheme.colorScheme.secondaryContainer
+fun statTileContainerColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.background.luminance() < 0.5f) {
+        scheme.secondaryContainer.blend(scheme.surfaceContainer, 0.55f)
+    } else {
+        scheme.secondaryContainer
+    }
+}
 
 @Composable
-fun statTileContentColor(): Color = MaterialTheme.colorScheme.onSecondaryContainer
+fun statTileContentColor(): Color {
+    val scheme = MaterialTheme.colorScheme
+    return if (scheme.background.luminance() < 0.5f) {
+        scheme.onSecondaryContainer.blend(statTileContainerColor(), 0.28f)
+    } else {
+        scheme.onSecondaryContainer.blend(scheme.secondaryContainer, 0.15f)
+    }
+}
 
 /**
  * Warna kartu: sedikit lebih terang dari top bar (saat di-scroll) dan bottom bar, tapi tidak sama

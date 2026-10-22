@@ -97,6 +97,8 @@
     <string name="auto_theme_desc">跟随系统</string>
     <string name="switch_icon">开关图标</string>
     <string name="switch_icon_desc">在开关上显示 ✓ 和 ✕ 图标</string>
+    <string name="bold_text">粗体文字</string>
+    <string name="bold_text_desc">应用内所有文字使用 OnePlus Sans Bold</string>
     <string name="dynamic_color">莫奈取色</string>
     <string name="dynamic_color_desc">莫奈取色是 Android12 的 Material You 新特性,它会根据系统壁纸来生成主题色</string>
     <string name="color_palette">调色板</string>
