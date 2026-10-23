@@ -77,7 +77,6 @@ import com.ramcosta.composedestinations.generated.destinations.DeveloperScreenDe
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsEditorScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.adb.util.AdbEnvironment
@@ -122,7 +121,7 @@ fun SettingsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                     ) {
                         Text(
                             text = stringResource(R.string.settings),
-                            style = screenTitleStyle(),
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

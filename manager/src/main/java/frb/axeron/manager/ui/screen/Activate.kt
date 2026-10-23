@@ -71,7 +71,6 @@ import frb.axeron.adb.AdbPairingService
 import frb.axeron.adb.util.AdbEnvironment
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.api.core.Starter
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.R
 import frb.axeron.manager.adb.AdbStateInfo
 import frb.axeron.manager.ui.component.ConfirmResult
@@ -106,7 +105,7 @@ fun ActivateScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                 title = {
                     Text(
                         text = stringResource(R.string.activate),
-                        style = screenTitleStyle(),
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },

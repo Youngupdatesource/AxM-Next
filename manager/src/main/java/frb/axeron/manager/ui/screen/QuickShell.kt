@@ -55,7 +55,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.theme.sheetContainerColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -200,7 +199,7 @@ fun QuickShellScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewMode
                     ) {
                         Text(
                             text = stringResource(R.string.quick_shell),
-                            style = screenTitleStyle(),
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

@@ -59,7 +59,6 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.FlashScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.AxeronPluginService
@@ -129,7 +128,7 @@ fun PluginScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGlo
                 title = {
                     Text(
                         text = stringResource(R.string.plugin),
-                        style = screenTitleStyle(),
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                 },

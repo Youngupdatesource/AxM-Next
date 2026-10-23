@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.R
 import frb.axeron.manager.ui.component.SettingsItem
@@ -101,7 +100,7 @@ private fun TopBar(
     TopAppBar(
         title = { Text(
                 text = stringResource(R.string.developer),
-                style = screenTitleStyle(),
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
             ) }, navigationIcon = {
             IconButton(

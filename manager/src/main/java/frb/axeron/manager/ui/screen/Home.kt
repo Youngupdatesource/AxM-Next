@@ -93,7 +93,6 @@ import com.ramcosta.composedestinations.generated.destinations.PluginScreenDesti
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.QuickShellScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.Axeron
@@ -160,7 +159,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                             Text(
                                 modifier = Modifier.padding(start = 10.dp),
                                 text = stringResource(R.string.app_name),
-                                style = screenTitleStyle(),
+                                style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(

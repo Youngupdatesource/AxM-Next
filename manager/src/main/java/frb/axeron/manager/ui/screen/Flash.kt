@@ -1,6 +1,5 @@
 package frb.axeron.manager.ui.screen
 
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.ServerRestart
 import android.app.Activity
 import android.content.Context
@@ -554,7 +553,7 @@ private fun TopBar(
                         stringResource(R.string.idle)
                     }
                 },
-                style = screenTitleStyle(),
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = when (status) {
                     FlashingStatus.FLASHING -> ORANGE
