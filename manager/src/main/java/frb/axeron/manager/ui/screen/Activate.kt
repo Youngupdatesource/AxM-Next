@@ -72,8 +72,6 @@ import frb.axeron.adb.util.AdbEnvironment
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.api.core.Starter
 import frb.axeron.manager.R
-import frb.axeron.manager.ui.theme.applyBoldText
-import frb.axeron.manager.ui.util.AppearancePrefs
 import frb.axeron.manager.adb.AdbStateInfo
 import frb.axeron.manager.ui.component.ConfirmResult
 import frb.axeron.manager.adb.OtgActivator
@@ -560,7 +558,6 @@ fun RootCard(
             // wireless debugging card above: bodyMedium + onSurfaceVariant).
             val messageColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
             val linkColor = MaterialTheme.colorScheme.primary.toArgb()
-            val boldText = AppearancePrefs.boldText
             @Suppress("COMPOSE_APPLIER_CALL_MISMATCH")
             AndroidView(
                 factory = { context ->
@@ -579,7 +576,6 @@ fun RootCard(
                 update = {
                     it.setTextColor(messageColor)
                     it.setLinkTextColor(linkColor)
-                    it.applyBoldText(boldText)
                 }
             )
             Spacer(modifier = Modifier.size(20.dp))

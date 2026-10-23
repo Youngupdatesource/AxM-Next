@@ -1,15 +1,11 @@
 package frb.axeron.manager.ui.theme
 
-import android.content.Context
-import android.graphics.Typeface
-import android.widget.TextView
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.core.content.res.ResourcesCompat
 import frb.axeron.manager.R
 
 val BoldFontFamily = FontFamily(
@@ -55,16 +51,4 @@ fun boldTypography(base: Typography = Typography): Typography {
         labelMedium = base.labelMedium.bold(),
         labelSmall = base.labelSmall.bold()
     )
-}
-
-/**
- * Typeface native setara [BoldFontFamily]. Dipakai untuk View klasik (TextView di dalam
- * AndroidView) yang tidak membaca MaterialTheme.typography. Null bila font gagal dimuat.
- */
-fun boldTypeface(context: Context): Typeface? =
-    ResourcesCompat.getFont(context, R.font.oneplus_sans_bold)
-
-/** Terapkan/lepas font tebal pada TextView native sesuai opsi Teks tebal. */
-fun TextView.applyBoldText(enabled: Boolean) {
-    typeface = if (enabled) boldTypeface(context) ?: Typeface.DEFAULT else Typeface.DEFAULT
 }
