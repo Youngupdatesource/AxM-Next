@@ -98,7 +98,7 @@
     <string name="switch_icon">Ikon Switch</string>
     <string name="switch_icon_desc">Tampilkan ikon ✓ dan ✕ pada switch</string>
     <string name="bold_text">Teks tebal</string>
-    <string name="bold_text_desc">Gunakan OnePlus Sans Bold untuk semua teks di aplikasi</string>
+    <string name="bold_text_desc">Gunakan SF Display Bold untuk semua teks di aplikasi</string>
     <string name="dynamic_color">Warna Dinamis</string>
     <string name="dynamic_color_desc">Pilih warna secara dinamis</string>
     <string name="color_palette">Palet Warna</string>

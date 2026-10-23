@@ -60,6 +60,7 @@ import com.maxkeppeler.sheets.list.models.ListSelection
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.api.core.AxeronSettings
 import frb.axeron.manager.R
@@ -410,7 +411,7 @@ private fun TopBar(
         title = {
             Text(
                 text = stringResource(R.string.appearance),
-                style = MaterialTheme.typography.titleLarge,
+                style = screenTitleStyle(),
                 fontWeight = FontWeight.Black,
             )
         }, navigationIcon = {

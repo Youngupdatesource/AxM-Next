@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.manager.ui.util.LocalCapsuleInset
@@ -89,7 +90,7 @@ fun PrivilegeScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.privilege_manager),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = screenTitleStyle(),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },

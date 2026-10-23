@@ -98,7 +98,7 @@
     <string name="switch_icon">Switch icon</string>
     <string name="switch_icon_desc">Show ✓ and ✕ icons on switches</string>
     <string name="bold_text">Bold text</string>
-    <string name="bold_text_desc">Use OnePlus Sans Bold for all text in the app</string>
+    <string name="bold_text_desc">Use SF Display Bold for all text in the app</string>
     <string name="dynamic_color">Dynamic Color</string>
     <string name="dynamic_color_desc">Select colors dynamically</string>
     <string name="color_palette">Color Palette</string>
