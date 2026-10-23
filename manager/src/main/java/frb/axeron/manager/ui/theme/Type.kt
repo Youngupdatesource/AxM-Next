@@ -19,7 +19,7 @@ val BoldFontFamily = FontFamily(
         FontWeight.W700,
         FontWeight.W800,
         FontWeight.W900
-    ).map { Font(R.font.oneplus_sans_bold, weight = it) }
+    ).map { Font(R.font.oneplus_sans_w300, weight = it) }
 )
 
 val Typography = Typography(
@@ -33,7 +33,7 @@ val Typography = Typography(
 )
 
 fun boldTypography(base: Typography = Typography): Typography {
-    fun TextStyle.bold() = copy(fontFamily = BoldFontFamily)
+    fun TextStyle.bold() = copy(fontFamily = BoldFontFamily, fontWeight = FontWeight.W300)
     return base.copy(
         displayLarge = base.displayLarge.bold(),
         displayMedium = base.displayMedium.bold(),
