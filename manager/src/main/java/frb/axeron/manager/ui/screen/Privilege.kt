@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalTabScrollStates
 import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.manager.ui.util.LocalCapsuleInset
@@ -37,6 +38,7 @@ import frb.axeron.manager.ui.component.RoundedCheckbox
 import frb.axeron.manager.ui.component.SearchAppBar
 import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.component.UseLifecycle
+import frb.axeron.manager.ui.viewmodel.AppsViewModel
 import frb.axeron.manager.ui.viewmodel.ViewModelGlobal
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.clip
@@ -88,7 +90,7 @@ fun PrivilegeScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.privilege_manager),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = screenTitleStyle(),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },
@@ -155,6 +157,10 @@ fun PrivilegeScreen(
                 privilegeViewModel.loadInstalledApps()
             }
         ) {
+            val keyTracker = remember { PrivilegeKeyTracker() }
+            val sourceList = privilegeViewModel.privilegeList
+            val keyedList = remember(sourceList) { keyTracker.keyed(sourceList) }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -165,13 +171,14 @@ fun PrivilegeScreen(
                 )
             ) {
                 items(
-                    privilegeViewModel.privilegeList,
-                    key = { it.packageName + it.uid },
+                    keyedList,
+                    key = { it.key },
                     contentType = { "privilege_app" }
-                ) { app ->
+                ) { keyed ->
+                    val app = keyed.app
                     ListItem(
                         modifier = Modifier
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            .animateItem()
                             .padding(end = 6.dp, top = 6.dp),
                         headlineContent = {
                             Text(
@@ -276,6 +283,26 @@ fun PrivilegeScreen(
                 }
             }
 
+        }
+    }
+}
+
+private class KeyedApp(val key: String, val app: AppsViewModel.AppInfo)
+
+private class PrivilegeKeyTracker {
+    private val generations = HashMap<String, Int>()
+    private var previousIds: Set<String> = emptySet()
+
+    fun keyed(apps: List<AppsViewModel.AppInfo>): List<KeyedApp> {
+        val ids = apps.map { it.packageName + it.uid }
+        val currentIds = ids.toHashSet()
+        for (id in previousIds) {
+            if (id !in currentIds) generations[id] = (generations[id] ?: 0) + 1
+        }
+        previousIds = currentIds
+        return apps.mapIndexed { index, app ->
+            val id = ids[index]
+            KeyedApp("$id#${generations[id] ?: 0}", app)
         }
     }
 }

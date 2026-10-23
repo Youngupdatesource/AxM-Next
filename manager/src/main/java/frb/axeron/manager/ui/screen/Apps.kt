@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AppIcon
 import com.ramcosta.composedestinations.annotation.Destination
@@ -115,7 +116,7 @@ fun AppsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                 title = {
                     Text(
                         text = "Application",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = screenTitleStyle(),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },

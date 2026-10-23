@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.runtime.remember
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.component.TerminalOptionsSheet
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -132,7 +133,7 @@ fun ExecutePluginActionScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.action),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = screenTitleStyle(),
                         fontWeight = FontWeight.SemiBold,
                     )
                 },

@@ -28,6 +28,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.ui.component.AxSwitch
 import frb.axeron.manager.ui.component.AppIcon
@@ -53,7 +54,7 @@ fun AddAppsScreen(
             SearchAppBar(
                 title = { Text(
                     text = "Select App",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = screenTitleStyle(),
                     fontWeight = FontWeight.SemiBold,
                 ) },
                 searchLabel = "Search Apps",

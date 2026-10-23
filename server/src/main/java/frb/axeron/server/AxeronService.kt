@@ -786,7 +786,7 @@ open class AxeronService :
 
         val callingPid = getCallingPid()
         val callingUid = getCallingUid()
-        var clientRecord: ClientRecord? = null
+        var clientRecord: ClientRecord? = clientManager.findClient(callingUid, callingPid)
 
         val packages = PackageManagerApis.getPackagesForUidNoThrow(callingUid)
         if (!packages.contains(requestPackageName)) {
@@ -796,7 +796,7 @@ open class AxeronService :
 
         val isManager: Boolean = MANAGER_APPLICATION_ID == requestPackageName
 
-        if (clientManager.findClient(callingUid, callingPid) == null) {
+        if (clientRecord == null) {
             synchronized(this) {
                 clientRecord = clientManager.addClient(
                     callingUid,

@@ -53,11 +53,32 @@ public class BinderSender {
             return;
         }
 
+        boolean sent = false;
+        try {
+            sent = doSendBinder(uid, pid);
+        } finally {
+            if (!sent) {
+                SENT_BINDERS.remove(key);
+            }
+        }
+    }
+
+    private static void forgetSent(int uid, int pid) {
+        SENT_BINDERS.remove(uid + ":" + pid);
+        SENT_BINDERS.remove(uid + ":-1");
+    }
+
+    private static void forgetSentUid(int uid) {
+        String prefix = uid + ":";
+        SENT_BINDERS.removeIf(key -> key.startsWith(prefix));
+    }
+
+    private static boolean doSendBinder(int uid, int pid) throws RemoteException {
         int userId = uid / 100000;
 
         List<String> packages = getPackagesCached(uid);
         if (packages.isEmpty())
-            return;
+            return false;
 
         boolean isOurManager = packages.contains(ManagerIdentity.MANAGER_APPLICATION_ID);
 
@@ -70,12 +91,12 @@ public class BinderSender {
                     uid
             );
             AxeronService.sendBinderToManager(axeronService.asBinder(), userId);
-            return;
+            return true;
         }
 
         // Kalau bukan manager, dan shizuku null → STOP
         if (shizukuService == null)
-            return;
+            return false;
 
         LOGGER.d(
                 "sendBinder to uid %d: packages=%s",
@@ -105,7 +126,7 @@ public class BinderSender {
                                 axeronService.asBinder(),
                                 userId
                         );
-                        return;
+                        return true;
                     }
 
                 } else if (ArraysKt.contains(pi.requestedPermissions, SHIZUKU_PERMISSION_MANAGER)) {
@@ -120,7 +141,7 @@ public class BinderSender {
                                 shizukuService.asBinder(),
                                 userId
                         );
-                        return;
+                        return true;
                     }
 
                 } else if (ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
@@ -129,13 +150,14 @@ public class BinderSender {
                             packageName,
                             userId
                     );
-                    return;
+                    return true;
                 }
 
             } catch (Throwable e) {
                 LOGGER.w(e, "sendBinder failed for package %s", packageName);
             }
         }
+        return false;
     }
 
 
