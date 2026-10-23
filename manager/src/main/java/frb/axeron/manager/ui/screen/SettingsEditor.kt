@@ -105,7 +105,6 @@ import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import frb.axeron.manager.ui.theme.screenTitleStyle
 import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.manager.R
 import frb.axeron.manager.data.SettingsRepository
@@ -291,7 +290,7 @@ fun SettingsEditorScreen(
                 title = {
                     Text(
                         text = "Settings Editor",
-                        style = screenTitleStyle(),
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
                 },
