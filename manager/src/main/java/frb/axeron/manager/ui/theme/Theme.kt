@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.material3.TextFieldDefaults
@@ -14,6 +15,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -80,7 +82,17 @@ fun AxManagerTheme(
         typography = typography,
         shapes = AxShapes
     ) {
-        contentCompose(settingsViewModel)
+        // Text() tanpa style eksplisit membaca LocalTextStyle (bawaan: font sistem), bukan
+        // MaterialTheme.typography, jadi tidak ikut tebal. Provider selalu dipasang (bukan
+        // dicabangkan) supaya struktur komposisi stabil dan state layar tidak ter-reset saat
+        // opsi Teks tebal di-toggle. Hanya fontFamily yang diganti; ukuran/warna tidak berubah.
+        val baseTextStyle = LocalTextStyle.current
+        val textStyle = remember(boldText, baseTextStyle) {
+            if (boldText) baseTextStyle.copy(fontFamily = BoldFontFamily) else baseTextStyle
+        }
+        CompositionLocalProvider(LocalTextStyle provides textStyle) {
+            contentCompose(settingsViewModel)
+        }
     }
 }
 

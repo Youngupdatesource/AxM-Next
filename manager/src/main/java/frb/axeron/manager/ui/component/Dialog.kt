@@ -35,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import frb.axeron.manager.ui.theme.applyBoldText
+import frb.axeron.manager.ui.util.AppearancePrefs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -563,6 +565,7 @@ private fun ConfirmDialog(
 @Composable
 private fun MarkdownContent(content: String) {
     val contentColor = LocalContentColor.current
+    val boldText = AppearancePrefs.boldText
 
     AndroidView(
         factory = { context ->
@@ -584,6 +587,7 @@ private fun MarkdownContent(content: String) {
         update = {
             Markwon.create(it.context).setMarkdown(it, content)
             it.setTextColor(contentColor.toArgb())
+            it.applyBoldText(boldText)
         }
     )
 }
