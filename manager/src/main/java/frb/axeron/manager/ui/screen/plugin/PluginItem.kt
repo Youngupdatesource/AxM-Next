@@ -1,20 +1,7 @@
 package frb.axeron.manager.ui.screen.plugin
 
 import android.content.Context
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -340,39 +327,14 @@ fun PluginItem(
         showExtraSetDialog = false
     }
 
-    val cardInteraction = remember { MutableInteractionSource() }
-    val cardPressed by cardInteraction.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (cardPressed) 0.985f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "pluginPressScale"
-    )
-    val bannerProgress by animateFloatAsState(
-        targetValue = if (expanded || cardPressed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "pluginBannerProgress"
-    )
-
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(
             containerColor = cardContainerColor(MaterialTheme.colorScheme.surfaceContainerLow)
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = pressScale
-                scaleY = pressScale
-            }
             .clip(MaterialTheme.shapes.medium)
             .combinedClickable(
-                interactionSource = cardInteraction,
-                indication = LocalIndication.current,
                 onClick = onExpandToggle,
                 onLongClick = { showExtraSetDialog = true }
             )
@@ -419,31 +381,23 @@ fun PluginItem(
                         model = bannerData,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight()
-                            .graphicsLayer {
-                                val zoom = 1f + 0.08f * bannerProgress
-                                scaleX = zoom
-                                scaleY = zoom
-                                this.alpha = 0.6f + 0.4f * bannerProgress
-                            },
-                        alpha = 0.30f
+                            .fillMaxHeight(),
+                        alpha = 0.18f
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight()
-                            .drawBehind {
-                                drawRect(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            fadeColor.copy(alpha = 0.0f),
-                                            fadeColor.copy(alpha = alpha + 0.2f * bannerProgress)
-                                        ),
-                                        startY = 0f,
-                                        endY = size.height
-                                    )
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        fadeColor.copy(alpha = 0.0f),
+                                        fadeColor.copy(alpha = alpha)
+                                    ),
+                                    startY = 0f,
+                                    endY = Float.POSITIVE_INFINITY
                                 )
-                            }
+                            )
                     )
                 }
             }
@@ -648,38 +602,29 @@ fun PluginItem(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    PluginDescription(
+                    Text(
                         text = plugin.prop.description,
-                        expanded = expanded
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                        fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
+                        lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                        fontWeight = MaterialTheme.typography.bodySmall.fontWeight,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 4
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
+                    if (expanded) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
                     AnimatedVisibility(
                         visible = expanded,
-                        enter = fadeIn(tween(240, delayMillis = 70)) +
-                                expandVertically(
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                ) +
-                                slideInVertically(
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                ) { it / 4 },
-                        exit = fadeOut(tween(140)) +
-                                shrinkVertically(
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessMediumLow
-                                    )
-                                )
+                        enter = fadeIn() + expandVertically(),
+                        exit = shrinkVertically() + fadeOut()
                     ) {
                         Row(
-                            modifier = Modifier.padding(top = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -820,37 +765,5 @@ fun PluginItem(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PluginDescription(text: String, expanded: Boolean) {
-    val colorScheme = MaterialTheme.colorScheme
-    val color by animateColorAsState(
-        targetValue = if (expanded) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-        animationSpec = tween(300),
-        label = "pluginDescriptionColor"
-    )
-    AnimatedContent(
-        targetState = text,
-        transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(160)) },
-        modifier = Modifier.animateContentSize(
-            spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-        ),
-        label = "pluginDescription"
-    ) { value ->
-        Text(
-            text = value,
-            fontSize = MaterialTheme.typography.bodySmall.fontSize,
-            fontFamily = MaterialTheme.typography.bodySmall.fontFamily,
-            lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
-            fontWeight = MaterialTheme.typography.bodySmall.fontWeight,
-            overflow = TextOverflow.Ellipsis,
-            color = color,
-            maxLines = if (expanded) 10 else 4
-        )
     }
 }
