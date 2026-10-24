@@ -704,6 +704,17 @@ open class AxeronService :
         }
 
         LOGGER.i("Requesting Permission")
+
+        // Manager bisa saja sedang tertutup (proses mati). Kirim binder langsung ke provider manager
+        // supaya proses manager dihidupkan dan sudah memegang binder SEBELUM dialog izin tampil.
+        // Tanpa ini dialog menunggu binder yang tidak pernah datang -> izin Shizuku tidak merespon.
+        val managerUserId = if (isWorkProfileUser) 0 else userId
+        try {
+            sendBinderToManager(this, managerUserId)
+        } catch (e: Throwable) {
+            LOGGER.w(e, "showPermissionConfirmation: failed to push binder to manager")
+        }
+
         val intent = Intent(ManagerIdentity.REQUEST_PERMISSION_ACTION)
             .setPackage(MANAGER_APPLICATION_ID)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
@@ -711,7 +722,7 @@ open class AxeronService :
             .putExtra("pid", callingPid)
             .putExtra("requestCode", requestCode)
             .putExtra("applicationInfo", ai)
-        ActivityManagerApis.startActivityNoThrow(intent, null, if (isWorkProfileUser) 0 else userId)
+        ActivityManagerApis.startActivityNoThrow(intent, null, managerUserId)
     }
 
     @Throws(RemoteException::class)

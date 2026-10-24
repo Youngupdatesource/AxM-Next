@@ -265,6 +265,9 @@ public class BinderSender {
             synchronized (PID_LIST) {
                 PID_LIST.remove(pid);
             }
+            // Proses mati -> binder yang pernah dikirim sudah tidak berlaku.
+            // Tanpa ini, proses baru dengan uid sama (mis. manager dibuka lagi) dilewati.
+            forgetSent(uid, pid);
         }
 
         @Override
@@ -334,6 +337,7 @@ public class BinderSender {
                 UID_LIST.remove(uid);
                 LOGGER.v("Uid %d dead", uid);
             }
+            forgetSentUid(uid);
         }
     }
 }
