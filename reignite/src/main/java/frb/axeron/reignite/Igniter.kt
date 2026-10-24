@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit
 
 object Igniter {
 
-    private var VERSION = "v1.1"
+    private var VERSION = "v1.2"
 
     private val AXERONDIR = System.getenv("AXERONDIR")
     private val PLUGINS_DIR = File("$AXERONDIR/plugins")
