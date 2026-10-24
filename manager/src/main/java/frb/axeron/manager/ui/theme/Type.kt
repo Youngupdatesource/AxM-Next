@@ -9,13 +9,18 @@ import androidx.compose.ui.unit.sp
 import frb.axeron.manager.R
 
 /**
- * Satu-satunya font aplikasi: San Francisco.
- * File font hanya satu (sudah Bold). Sengaja dideklarasikan sebagai W400 supaya
- * saat teks meminta weight >= W600 (mode bold) Compose menambahkan synthetic bold
- * di atas glyph Bold tersebut -> hasilnya lebih tebal dari mode normal.
+ * Satu keluarga font: San Francisco.
+ * - Mode normal : sanfrancisco_bold  (file asli)
+ * - Mode bold   : sanfrancisco_heavy (turunan file yang sama, outline dipertebal)
+ * Tiap family hanya berisi satu file untuk SEMUA weight, jadi teks dengan
+ * FontWeight eksplisit (SemiBold/Bold) di dalam satu mode tetap memakai font yang sama.
  */
 val AppFontFamily = FontFamily(
-    Font(R.font.sanfrancisco_bold, weight = FontWeight.W400)
+    Font(R.font.sanfrancisco_bold, weight = FontWeight.W700)
+)
+
+val BoldFontFamily = FontFamily(
+    Font(R.font.sanfrancisco_heavy, weight = FontWeight.W800)
 )
 
 private fun Typography.withFont(family: FontFamily) = copy(
@@ -45,27 +50,26 @@ val Typography = Typography(
     )
 ).withFont(AppFontFamily)
 
-/** Mode bold: font tebal + jarak antar huruf dirapatkan (letterSpacing negatif). */
-private fun boldStyle(weight: FontWeight, spacing: Float, base: TextStyle) = base.copy(
-    fontFamily = AppFontFamily,
-    fontWeight = weight,
-    letterSpacing = spacing.sp
+/** Mode bold: pakai font Heavy, letterSpacing mengikuti default (tidak dirapatkan). */
+private fun boldStyle(base: TextStyle) = base.copy(
+    fontFamily = BoldFontFamily,
+    fontWeight = FontWeight.W800
 )
 
 fun boldTypography(base: Typography = Typography): Typography = base.copy(
-    displayLarge = boldStyle(FontWeight.W800, -1.0f, base.displayLarge),
-    displayMedium = boldStyle(FontWeight.W800, -0.8f, base.displayMedium),
-    displaySmall = boldStyle(FontWeight.W800, -0.6f, base.displaySmall),
-    headlineLarge = boldStyle(FontWeight.W800, -0.6f, base.headlineLarge),
-    headlineMedium = boldStyle(FontWeight.W800, -0.5f, base.headlineMedium),
-    headlineSmall = boldStyle(FontWeight.W800, -0.4f, base.headlineSmall),
-    titleLarge = boldStyle(FontWeight.W800, -0.4f, base.titleLarge),
-    titleMedium = boldStyle(FontWeight.W800, -0.3f, base.titleMedium),
-    titleSmall = boldStyle(FontWeight.W800, -0.2f, base.titleSmall),
-    bodyLarge = boldStyle(FontWeight.W600, -0.3f, base.bodyLarge),
-    bodyMedium = boldStyle(FontWeight.W600, -0.2f, base.bodyMedium),
-    bodySmall = boldStyle(FontWeight.W600, -0.1f, base.bodySmall),
-    labelLarge = boldStyle(FontWeight.W700, -0.2f, base.labelLarge),
-    labelMedium = boldStyle(FontWeight.W600, -0.1f, base.labelMedium),
-    labelSmall = boldStyle(FontWeight.W600, -0.1f, base.labelSmall)
+    displayLarge = boldStyle(base.displayLarge),
+    displayMedium = boldStyle(base.displayMedium),
+    displaySmall = boldStyle(base.displaySmall),
+    headlineLarge = boldStyle(base.headlineLarge),
+    headlineMedium = boldStyle(base.headlineMedium),
+    headlineSmall = boldStyle(base.headlineSmall),
+    titleLarge = boldStyle(base.titleLarge),
+    titleMedium = boldStyle(base.titleMedium),
+    titleSmall = boldStyle(base.titleSmall),
+    bodyLarge = boldStyle(base.bodyLarge),
+    bodyMedium = boldStyle(base.bodyMedium),
+    bodySmall = boldStyle(base.bodySmall),
+    labelLarge = boldStyle(base.labelLarge),
+    labelMedium = boldStyle(base.labelMedium),
+    labelSmall = boldStyle(base.labelSmall)
 )
