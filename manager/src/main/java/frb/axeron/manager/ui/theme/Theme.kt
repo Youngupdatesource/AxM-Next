@@ -130,25 +130,18 @@ fun axTopAppBarColors(): TopAppBarColors {
     )
 }
 
+/**
+ * Warna tile statistik Home (Privilege, Plugin). Sama persis dengan warna pill terpilih di kapsul
+ * navigasi bawah (secondaryContainer), di tema terang maupun gelap, jadi tetap mengikuti palet
+ * dinamis (Material You) dan konsisten dengan kapsul. Dulu di tema gelap warnanya dicampur ke
+ * surfaceContainer sehingga lebih gelap daripada pill.
+ */
 @Composable
-fun statTileContainerColor(): Color {
-    val scheme = MaterialTheme.colorScheme
-    return if (scheme.background.luminance() < 0.5f) {
-        scheme.secondaryContainer.blend(scheme.surfaceContainer, 0.55f)
-    } else {
-        scheme.secondaryContainer
-    }
-}
+fun statTileContainerColor(): Color = MaterialTheme.colorScheme.secondaryContainer
 
+/** Warna isi tile statistik: sama dengan ikon + label pill terpilih (onSecondaryContainer). */
 @Composable
-fun statTileContentColor(): Color {
-    val scheme = MaterialTheme.colorScheme
-    return if (scheme.background.luminance() < 0.5f) {
-        scheme.onSecondaryContainer.blend(scheme.onSurfaceVariant, 0.50f)
-    } else {
-        scheme.onSecondaryContainer
-    }
-}
+fun statTileContentColor(): Color = MaterialTheme.colorScheme.onSecondaryContainer
 
 /**
  * Warna kartu: sedikit lebih terang dari top bar (saat di-scroll) dan bottom bar, tapi tidak sama
