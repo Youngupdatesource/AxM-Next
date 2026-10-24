@@ -8,34 +8,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import frb.axeron.manager.R
 
-val BoldFontFamily = FontFamily(
-    listOf(
-        FontWeight.W100,
-        FontWeight.W200,
-        FontWeight.W300,
-        FontWeight.W400,
-        FontWeight.W500
-    ).map { Font(R.font.oneplus_sans_bold_plus, weight = it) } +
-        listOf(
-            FontWeight.W600,
-            FontWeight.W700,
-            FontWeight.W800,
-            FontWeight.W900
-        ).map { Font(R.font.oneplus_sans_heavy, weight = it) }
+/**
+ * Satu-satunya font aplikasi: San Francisco.
+ * Dipakai ulang untuk semua weight & kedua mode (bold / non-bold), sehingga
+ * pergantian mode tidak lagi berganti file font.
+ */
+val AppFontFamily = FontFamily(
+    Font(R.font.sanfrancisco_bold, weight = FontWeight.W700)
+)
+
+private fun Typography.withFont(family: FontFamily) = copy(
+    displayLarge = displayLarge.copy(fontFamily = family),
+    displayMedium = displayMedium.copy(fontFamily = family),
+    displaySmall = displaySmall.copy(fontFamily = family),
+    headlineLarge = headlineLarge.copy(fontFamily = family),
+    headlineMedium = headlineMedium.copy(fontFamily = family),
+    headlineSmall = headlineSmall.copy(fontFamily = family),
+    titleLarge = titleLarge.copy(fontFamily = family),
+    titleMedium = titleMedium.copy(fontFamily = family),
+    titleSmall = titleSmall.copy(fontFamily = family),
+    bodyLarge = bodyLarge.copy(fontFamily = family),
+    bodyMedium = bodyMedium.copy(fontFamily = family),
+    bodySmall = bodySmall.copy(fontFamily = family),
+    labelLarge = labelLarge.copy(fontFamily = family),
+    labelMedium = labelMedium.copy(fontFamily = family),
+    labelSmall = labelSmall.copy(fontFamily = family)
 )
 
 val Typography = Typography(
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     )
-)
+).withFont(AppFontFamily)
 
 private fun boldStyle(weight: FontWeight, base: TextStyle) = base.copy(
-    fontFamily = BoldFontFamily,
+    fontFamily = AppFontFamily,
     fontWeight = weight
 )
 
