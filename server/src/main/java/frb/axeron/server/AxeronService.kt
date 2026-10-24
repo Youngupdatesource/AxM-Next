@@ -962,9 +962,10 @@ open class AxeronService :
                 val lowered = android.os.Process.myUid() == 0 &&
                     getFlagsForUidInternal(uid, AxshConstants.FLAG_AXSH_ROOTLESS) != 0
                 val command = if (lowered) {
-                    val helper = File(System.getProperty("axeron.library.path").orEmpty(), AxshConstants.DROP_HELPER)
+                    val libDir = System.getProperty("axeron.library.path").orEmpty()
+                    val helper = File(libDir, AxshConstants.DROP_HELPER)
                     if (!helper.canExecute()) {
-                        throw SecurityException("Rootless debugging unavailable: ${AxshConstants.DROP_HELPER} not found")
+                        throw SecurityException("Rootless debugging unavailable: ${AxshConstants.DROP_HELPER} not found in $libDir")
                     }
                     AxshConstants.rootlessArgv(helper.path, argv)
                 } else {

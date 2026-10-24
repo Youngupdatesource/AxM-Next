@@ -152,7 +152,7 @@ fun SearchAppBar(
             }
 
         },
-        colors = frb.axeron.manager.ui.theme.axTopAppBarColors(),
+        colors = frb.axeron.manager.ui.theme.axScrollTopAppBarColors(),
         scrollBehavior = scrollBehavior
     )
 }

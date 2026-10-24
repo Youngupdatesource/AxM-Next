@@ -131,6 +131,21 @@ fun axTopAppBarColors(): TopAppBarColors {
 }
 
 /**
+ * Warna top bar layar tab (Home, Hak Istimewa, Plugin, Pengaturan) dan pencarian. Saat diam sama
+ * dengan latar layar; begitu konten di-scroll berubah ke surfaceContainer, persis seperti header
+ * layar Appearance (warna yang sama dengan kapsul navigasi bawah).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun axScrollTopAppBarColors(): TopAppBarColors {
+    val scheme = MaterialTheme.colorScheme
+    return TopAppBarDefaults.topAppBarColors(
+        containerColor = scheme.background,
+        scrolledContainerColor = scheme.surfaceContainer
+    )
+}
+
+/**
  * Warna tile statistik Home (Privilege, Plugin). Sama persis dengan warna pill terpilih di kapsul
  * navigasi bawah (secondaryContainer), di tema terang maupun gelap, jadi tetap mengikuti palet
  * dinamis (Material You) dan konsisten dengan kapsul. Dulu di tema gelap warnanya dicampur ke

@@ -82,6 +82,7 @@ import frb.axeron.manager.ui.util.LocalCapsuleInset
 import frb.axeron.adb.util.AdbEnvironment
 import frb.axeron.api.Axeron
 import frb.axeron.manager.R
+import frb.axeron.manager.ui.theme.axScrollTopAppBarColors
 import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.theme.insetTextFieldColors
 import frb.axeron.manager.ui.component.ConfirmResult
@@ -135,7 +136,9 @@ fun SettingsScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelG
                     {
                         Icon(Icons.Outlined.Info, null)
                     }
-                }
+                },
+                colors = axScrollTopAppBarColors(),
+                scrollBehavior = scrollBehavior
             )
         }
     ) { paddingValues ->

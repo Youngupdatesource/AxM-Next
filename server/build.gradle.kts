@@ -13,6 +13,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += "-DANDROID_STL=none"
+                targets += listOf("libaxeron.so", "libaxdrop.so")
                 // Hanya kompilasi native untuk perangkat Android (ARM).
                 abiFilters += listOf("arm64-v8a", "armeabi-v7a")
             }

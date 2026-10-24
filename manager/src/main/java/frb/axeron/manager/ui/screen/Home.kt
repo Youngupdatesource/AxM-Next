@@ -122,7 +122,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
-import frb.axeron.manager.ui.theme.axTopAppBarColors
+import frb.axeron.manager.ui.theme.axScrollTopAppBarColors
 import frb.axeron.manager.ui.theme.cardContainerColor
 import frb.axeron.manager.ui.theme.cardElevation
 
@@ -216,7 +216,7 @@ fun HomeScreen(navigator: DestinationsNavigator, viewModelGlobal: ViewModelGloba
                     }
                     Spacer(modifier = Modifier.padding(end = 12.dp))
                 },
-                colors = axTopAppBarColors(),
+                colors = axScrollTopAppBarColors(),
                 scrollBehavior = scrollBehavior,
             )
         },

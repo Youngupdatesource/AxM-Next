@@ -35,6 +35,8 @@ class PluginViewModel(application: Application) : AndroidViewModel(application) 
 
     var search by mutableStateOf("")
 
+    var expandedPluginId by mutableStateOf<String?>(null)
+
     var getSelectedAsc by mutableIntStateOf(
         prefs.getInt("selected_asc", 0)
     )

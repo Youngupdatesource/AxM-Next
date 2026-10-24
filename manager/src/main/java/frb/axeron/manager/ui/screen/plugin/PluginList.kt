@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,8 +67,6 @@ fun PluginList(
 
     val loadingDialog = rememberLoadingDialog()
     val confirmDialog = rememberConfirmDialog()
-
-    var expandedPluginId by rememberSaveable { mutableStateOf<String?>(null) }
 
     val updateText = stringResource(R.string.update)
     val changelogText = stringResource(R.string.changelog)
@@ -304,10 +301,10 @@ fun PluginList(
                             onClick = {
                                 onClickModule(plugin)
                             },
-                            expanded = expandedPluginId == plugin.prop.id,
+                            expanded = viewModel.expandedPluginId == plugin.prop.id,
                             onExpandToggle = {
-                                expandedPluginId =
-                                    if (expandedPluginId == plugin.prop.id) null else plugin.prop.id
+                                viewModel.expandedPluginId =
+                                    if (viewModel.expandedPluginId == plugin.prop.id) null else plugin.prop.id
                             }
                         )
 

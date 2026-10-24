@@ -74,9 +74,11 @@ object Igniter {
     // MAIN LOOP
     // ===============================
     private fun mainLoop() {
-        PLUGINS_DIR.listFiles()?.forEach { plugin ->
-            if (!plugin.isDirectory) return@forEach
+        val plugins = PLUGINS_DIR.listFiles()?.filter { it.isDirectory }.orEmpty()
 
+        val pending = plugins.any { File(it, "update").exists() || File(it, "remove").exists() }
+
+        plugins.forEach { plugin ->
             val name = plugin.name
             val bin = File(plugin, "system/bin")
             val fsData = File(plugin, "post-fs-data.sh")
@@ -114,14 +116,32 @@ object Igniter {
 
                 isServiceRunning(name) -> {
                     println("- $name:${servicePids(name).joinToString(",")} is already running, skip.")
+                    markIgnited(name)
+                    return@forEach
+                }
+
+                pending && isIgnited(name) -> {
+                    println("- $name is already ignited, skip.")
                     return@forEach
                 }
             }
 
             println("- Starting $name")
             startPlugin(name, fsData, sProp, service, bin)
+            markIgnited(name)
         }
     }
+
+    // ===============================
+    // IGNITED TAG
+    // ===============================
+    private fun ignitedTag(name: String) = "log.tag.ignited.$name"
+
+    private fun isIgnited(name: String): Boolean = SystemProp.get(ignitedTag(name)) == "1"
+
+    private fun markIgnited(name: String) = SystemProp.set(ignitedTag(name), "1")
+
+    private fun clearIgnited(name: String) = SystemProp.set(ignitedTag(name), "0")
 
     // ===============================
     // START PLUGIN (subshell + &)
@@ -276,6 +296,7 @@ object Igniter {
     // STOP / UNINSTALL
     // ===============================
     private fun stopPlugin(name: String, bin: File) {
+        clearIgnited(name)
         SystemProp.set("log.tag.fs.$name", "0")
         SystemProp.set("log.tag.props.$name", "0")
 
@@ -296,7 +317,11 @@ object Igniter {
      * server may already be starting plugins meanwhile (a restart), so it is confined to what
      * was running when it began and what descends from or joined those, never fresh services.
      */
-    private fun stopAllPlugins() = stopProcesses("all plugins", confine = true) { allPluginPids() }
+    private fun stopAllPlugins() {
+        val running = PLUGINS_DIR.list().orEmpty().filter { servicePids(it).isNotEmpty() }
+        stopProcesses("all plugins", confine = true) { allPluginPids() }
+        running.forEach { clearIgnited(it) }
+    }
 
     private fun stopProcesses(label: String, confine: Boolean = false, scan: () -> List<Int>) {
         var pids = scan()
