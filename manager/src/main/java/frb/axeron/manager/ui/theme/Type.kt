@@ -44,25 +44,27 @@ val Typography = Typography(
     )
 ).withFont(AppFontFamily)
 
-private fun boldStyle(weight: FontWeight, base: TextStyle) = base.copy(
+/** Mode bold: font tebal + jarak antar huruf dirapatkan (letterSpacing negatif). */
+private fun boldStyle(weight: FontWeight, spacing: Float, base: TextStyle) = base.copy(
     fontFamily = AppFontFamily,
-    fontWeight = weight
+    fontWeight = weight,
+    letterSpacing = spacing.sp
 )
 
 fun boldTypography(base: Typography = Typography): Typography = base.copy(
-    displayLarge = boldStyle(FontWeight.W800, base.displayLarge),
-    displayMedium = boldStyle(FontWeight.W800, base.displayMedium),
-    displaySmall = boldStyle(FontWeight.W800, base.displaySmall),
-    headlineLarge = boldStyle(FontWeight.W800, base.headlineLarge),
-    headlineMedium = boldStyle(FontWeight.W800, base.headlineMedium),
-    headlineSmall = boldStyle(FontWeight.W800, base.headlineSmall),
-    titleLarge = boldStyle(FontWeight.W800, base.titleLarge),
-    titleMedium = boldStyle(FontWeight.W700, base.titleMedium),
-    titleSmall = boldStyle(FontWeight.W700, base.titleSmall),
-    bodyLarge = boldStyle(FontWeight.W500, base.bodyLarge),
-    bodyMedium = boldStyle(FontWeight.W500, base.bodyMedium),
-    bodySmall = boldStyle(FontWeight.W500, base.bodySmall),
-    labelLarge = boldStyle(FontWeight.W600, base.labelLarge),
-    labelMedium = boldStyle(FontWeight.W500, base.labelMedium),
-    labelSmall = boldStyle(FontWeight.W500, base.labelSmall)
+    displayLarge = boldStyle(FontWeight.W800, -1.0f, base.displayLarge),
+    displayMedium = boldStyle(FontWeight.W800, -0.8f, base.displayMedium),
+    displaySmall = boldStyle(FontWeight.W800, -0.6f, base.displaySmall),
+    headlineLarge = boldStyle(FontWeight.W800, -0.6f, base.headlineLarge),
+    headlineMedium = boldStyle(FontWeight.W800, -0.5f, base.headlineMedium),
+    headlineSmall = boldStyle(FontWeight.W800, -0.4f, base.headlineSmall),
+    titleLarge = boldStyle(FontWeight.W800, -0.4f, base.titleLarge),
+    titleMedium = boldStyle(FontWeight.W700, -0.3f, base.titleMedium),
+    titleSmall = boldStyle(FontWeight.W700, -0.2f, base.titleSmall),
+    bodyLarge = boldStyle(FontWeight.W500, -0.3f, base.bodyLarge),
+    bodyMedium = boldStyle(FontWeight.W500, -0.2f, base.bodyMedium),
+    bodySmall = boldStyle(FontWeight.W500, -0.1f, base.bodySmall),
+    labelLarge = boldStyle(FontWeight.W600, -0.2f, base.labelLarge),
+    labelMedium = boldStyle(FontWeight.W500, -0.1f, base.labelMedium),
+    labelSmall = boldStyle(FontWeight.W500, -0.1f, base.labelSmall)
 )
