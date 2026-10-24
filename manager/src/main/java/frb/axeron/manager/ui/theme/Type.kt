@@ -10,11 +10,12 @@ import frb.axeron.manager.R
 
 /**
  * Satu-satunya font aplikasi: San Francisco.
- * Dipakai ulang untuk semua weight & kedua mode (bold / non-bold), sehingga
- * pergantian mode tidak lagi berganti file font.
+ * File font hanya satu (sudah Bold). Sengaja dideklarasikan sebagai W400 supaya
+ * saat teks meminta weight >= W600 (mode bold) Compose menambahkan synthetic bold
+ * di atas glyph Bold tersebut -> hasilnya lebih tebal dari mode normal.
  */
 val AppFontFamily = FontFamily(
-    Font(R.font.sanfrancisco_bold, weight = FontWeight.W700)
+    Font(R.font.sanfrancisco_bold, weight = FontWeight.W400)
 )
 
 private fun Typography.withFont(family: FontFamily) = copy(
@@ -59,12 +60,12 @@ fun boldTypography(base: Typography = Typography): Typography = base.copy(
     headlineMedium = boldStyle(FontWeight.W800, -0.5f, base.headlineMedium),
     headlineSmall = boldStyle(FontWeight.W800, -0.4f, base.headlineSmall),
     titleLarge = boldStyle(FontWeight.W800, -0.4f, base.titleLarge),
-    titleMedium = boldStyle(FontWeight.W700, -0.3f, base.titleMedium),
-    titleSmall = boldStyle(FontWeight.W700, -0.2f, base.titleSmall),
-    bodyLarge = boldStyle(FontWeight.W500, -0.3f, base.bodyLarge),
-    bodyMedium = boldStyle(FontWeight.W500, -0.2f, base.bodyMedium),
-    bodySmall = boldStyle(FontWeight.W500, -0.1f, base.bodySmall),
-    labelLarge = boldStyle(FontWeight.W600, -0.2f, base.labelLarge),
-    labelMedium = boldStyle(FontWeight.W500, -0.1f, base.labelMedium),
-    labelSmall = boldStyle(FontWeight.W500, -0.1f, base.labelSmall)
+    titleMedium = boldStyle(FontWeight.W800, -0.3f, base.titleMedium),
+    titleSmall = boldStyle(FontWeight.W800, -0.2f, base.titleSmall),
+    bodyLarge = boldStyle(FontWeight.W600, -0.3f, base.bodyLarge),
+    bodyMedium = boldStyle(FontWeight.W600, -0.2f, base.bodyMedium),
+    bodySmall = boldStyle(FontWeight.W600, -0.1f, base.bodySmall),
+    labelLarge = boldStyle(FontWeight.W700, -0.2f, base.labelLarge),
+    labelMedium = boldStyle(FontWeight.W600, -0.1f, base.labelMedium),
+    labelSmall = boldStyle(FontWeight.W600, -0.1f, base.labelSmall)
 )
