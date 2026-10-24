@@ -3,7 +3,6 @@ package frb.axeron.manager.ui.screen.plugin
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -350,14 +349,6 @@ fun PluginItem(
         ),
         label = "pluginPressScale"
     )
-    val bannerProgress by animateFloatAsState(
-        targetValue = if (expanded || cardPressed) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "pluginBannerProgress"
-    )
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(
@@ -421,10 +412,7 @@ fun PluginItem(
                             .fillMaxWidth()
                             .fillMaxHeight()
                             .graphicsLayer {
-                                val zoom = 1f + 0.08f * bannerProgress
-                                scaleX = zoom
-                                scaleY = zoom
-                                this.alpha = 0.6f + 0.4f * bannerProgress
+                                this.alpha = 0.6f
                             },
                         alpha = 0.30f
                     )
@@ -437,7 +425,7 @@ fun PluginItem(
                                     Brush.verticalGradient(
                                         colors = listOf(
                                             fadeColor.copy(alpha = 0.0f),
-                                            fadeColor.copy(alpha = alpha + 0.2f * bannerProgress)
+                                            fadeColor.copy(alpha = alpha)
                                         ),
                                         startY = 0f,
                                         endY = size.height
@@ -826,11 +814,7 @@ fun PluginItem(
 @Composable
 private fun PluginDescription(text: String, expanded: Boolean) {
     val colorScheme = MaterialTheme.colorScheme
-    val color by animateColorAsState(
-        targetValue = if (expanded) colorScheme.onSurface else colorScheme.onSurfaceVariant,
-        animationSpec = tween(300),
-        label = "pluginDescriptionColor"
-    )
+    val color = colorScheme.onSurfaceVariant
     AnimatedContent(
         targetState = text,
         transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(160)) },
