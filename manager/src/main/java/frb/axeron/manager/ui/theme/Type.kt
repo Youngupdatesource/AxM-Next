@@ -10,13 +10,14 @@ import frb.axeron.manager.R
 
 /**
  * Satu keluarga font: San Francisco.
- * - Mode normal : sanfrancisco_bold  (file asli)
- * - Mode bold   : sanfrancisco_heavy (turunan file yang sama, outline dipertebal)
- * Tiap family hanya berisi satu file untuk SEMUA weight, jadi teks dengan
- * FontWeight eksplisit (SemiBold/Bold) di dalam satu mode tetap memakai font yang sama.
+ * - Mode normal (bold text OFF): sanfrancisco_medium
+ * - Mode bold   (bold text ON) : sanfrancisco_heavy
+ * Tiap family hanya berisi satu file untuk SEMUA weight. Di mode normal, teks yang
+ * meminta weight >= W600 (SemiBold/Bold eksplisit) mendapat synthetic bold dari Compose
+ * di atas Medium, sehingga hierarki judul vs isi tetap terlihat.
  */
 val AppFontFamily = FontFamily(
-    Font(R.font.sanfrancisco_bold, weight = FontWeight.W700)
+    Font(R.font.sanfrancisco_medium, weight = FontWeight.W500)
 )
 
 val BoldFontFamily = FontFamily(
